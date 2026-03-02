@@ -40,3 +40,4 @@ target/
 # Logs and temporary runtime artifacts
 *.log
 *.tmp
+00_Core/logs/hcb_napkin_summary_*.json
