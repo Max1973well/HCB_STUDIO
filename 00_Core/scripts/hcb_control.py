@@ -6,6 +6,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from arms.ai_engine import (
+    generate_with_active_provider,
+    load_engine_config,
+    save_engine_config,
+    set_active_provider,
+)
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
 
@@ -17,6 +23,7 @@ LOG_DIR = ROOT / "00_Core" / "logs"
 
 SENTINEL_SRC = ROOT / "03_TRAINING" / "PRJ_02_SENTINEL" / "src"
 NAPKIN_CHECKPOINT_DIR = Path(r"F:\PrimeiroProjetoTest\checkpoints")
+AI_ENGINE_CONFIG = ROOT / "00_Core" / "config" / "ai_engine.json"
 
 
 def ensure_import_path():
@@ -190,6 +197,52 @@ def command_arm_memory_find(args):
     _print_capsule_rows(rows)
 
 
+def _log_ai_response(result: dict) -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    file_name = f"hcb_ai_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    out = LOG_DIR / file_name
+    out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    return out
+
+
+def command_ai_status(_args):
+    cfg = load_engine_config(AI_ENGINE_CONFIG)
+    if not AI_ENGINE_CONFIG.exists():
+        save_engine_config(AI_ENGINE_CONFIG, cfg)
+    active = cfg.get("active_provider")
+    p = (cfg.get("providers") or {}).get(active, {})
+    print("--- HCB AI ENGINE STATUS ---")
+    print(f"Config: {AI_ENGINE_CONFIG}")
+    print(f"Active provider: {active}")
+    print(f"Model: {p.get('model')}")
+    print(f"Enabled: {p.get('enabled')}")
+    print(f"API key env: {p.get('api_key_env')}")
+
+
+def command_ai_set(args):
+    cfg = set_active_provider(AI_ENGINE_CONFIG, provider=args.provider, model=args.model)
+    active = cfg["active_provider"]
+    model = cfg["providers"][active].get("model")
+    print("--- HCB AI ENGINE UPDATED ---")
+    print(f"Active provider: {active}")
+    print(f"Model: {model}")
+    print(f"Config saved: {AI_ENGINE_CONFIG}")
+
+
+def command_ai_test(args):
+    result = generate_with_active_provider(AI_ENGINE_CONFIG, args.prompt)
+    print("--- HCB AI ENGINE TEST ---")
+    print(f"Provider: {result.get('provider')}")
+    print(f"Model: {result.get('model')}")
+    print(f"Timestamp: {result.get('timestamp')}")
+    print("\nResponse:")
+    print(result.get("text", ""))
+
+    if args.write_report:
+        report_path = _log_ai_response(result)
+        print(f"\nReport written to: {report_path}")
+
+
 def print_status(status: dict):
     print("--- HCB STATUS ---")
     print(f"Timestamp: {status['timestamp']}")
@@ -350,6 +403,25 @@ def build_parser():
     arm_memory_find.add_argument("--query", required=True)
     arm_memory_find.add_argument("--limit", type=int, default=20)
     arm_memory_find.set_defaults(func=command_arm_memory_find)
+
+    ai_parser = subparsers.add_parser(
+        "ai",
+        help="single active AI engine (Gemini now, extensible later)",
+    )
+    ai_sub = ai_parser.add_subparsers(dest="ai_command", required=True)
+
+    ai_status = ai_sub.add_parser("status", help="show active AI engine configuration")
+    ai_status.set_defaults(func=command_ai_status)
+
+    ai_set = ai_sub.add_parser("set", help="set active AI provider/model")
+    ai_set.add_argument("--provider", choices=["gemini"], default="gemini")
+    ai_set.add_argument("--model", default=None)
+    ai_set.set_defaults(func=command_ai_set)
+
+    ai_test = ai_sub.add_parser("test", help="run a prompt on the active AI engine")
+    ai_test.add_argument("--prompt", required=True)
+    ai_test.add_argument("--write-report", action="store_true")
+    ai_test.set_defaults(func=command_ai_test)
 
     return parser
 
