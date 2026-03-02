@@ -43,4 +43,5 @@ target/
 00_Core/logs/hcb_napkin_summary_*.json
 00_Core/logs/event_bus.jsonl
 00_Core/logs/vision_chat_history.json
+00_Core/dist/
 01_Archivus/capsules/
