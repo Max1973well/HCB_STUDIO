@@ -12,8 +12,11 @@ from arms.ai_engine import (
     save_engine_config,
     set_active_provider,
 )
+from arms.concept_registry import list_concepts, upsert_concept
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
+from arms.event_bus import append_event, read_recent_events
+from arms.planner_kernel import build_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMP_DIR = ROOT / "04_TEMP"
@@ -24,6 +27,8 @@ LOG_DIR = ROOT / "00_Core" / "logs"
 SENTINEL_SRC = ROOT / "03_TRAINING" / "PRJ_02_SENTINEL" / "src"
 NAPKIN_CHECKPOINT_DIR = Path(r"F:\PrimeiroProjetoTest\checkpoints")
 AI_ENGINE_CONFIG = ROOT / "00_Core" / "config" / "ai_engine.json"
+EVENT_LOG_PATH = ROOT / "00_Core" / "logs" / "event_bus.jsonl"
+CONCEPT_REGISTRY_PATH = ROOT / "00_Core" / "contracts" / "concept_registry.json"
 
 
 def ensure_import_path():
@@ -243,6 +248,95 @@ def command_ai_test(args):
         print(f"\nReport written to: {report_path}")
 
 
+def command_event_emit(args):
+    payload = {"note": args.note} if args.note else {}
+    event = append_event(EVENT_LOG_PATH, args.event_type, payload)
+    print("--- HCB EVENT EMIT ---")
+    print(json.dumps(event, indent=2, ensure_ascii=False))
+
+
+def command_event_tail(args):
+    rows = read_recent_events(EVENT_LOG_PATH, limit=args.limit)
+    print(f"--- HCB EVENT TAIL (last {args.limit}) ---")
+    if not rows:
+        print("(none)")
+        return
+    for row in rows:
+        print(f"- {row.get('timestamp')} | {row.get('event_type')} | {row.get('event_id')}")
+
+
+def command_concept_add(args):
+    concept = upsert_concept(
+        CONCEPT_REGISTRY_PATH,
+        name=args.name,
+        hypothesis=args.hypothesis,
+        status=args.status,
+        evidence=args.evidence,
+    )
+    append_event(
+        EVENT_LOG_PATH,
+        "concept_upserted",
+        {"name": concept.get("name"), "status": concept.get("status")},
+    )
+    print("--- HCB CONCEPT UPSERT ---")
+    print(json.dumps(concept, indent=2, ensure_ascii=False))
+
+
+def command_concept_list(_args):
+    concepts = list_concepts(CONCEPT_REGISTRY_PATH)
+    print("--- HCB CONCEPTS ---")
+    if not concepts:
+        print("(none)")
+        return
+    for c in concepts:
+        print(f"- {c.get('name')} | {c.get('status')} | updated: {c.get('updated_at')}")
+
+
+def command_kernel_plan(args):
+    plan = build_plan(args.goal)
+    append_event(EVENT_LOG_PATH, "plan_created", {"goal": plan["goal"], "steps": len(plan["steps"])})
+    print("--- HCB KERNEL PLAN ---")
+    print(json.dumps(plan, indent=2, ensure_ascii=False))
+
+
+def command_kernel_execute(args):
+    plan = build_plan(args.goal)
+    append_event(EVENT_LOG_PATH, "plan_execution_started", {"goal": plan["goal"], "steps": len(plan["steps"])})
+    print("--- HCB KERNEL EXECUTE ---")
+    print(f"Goal: {plan['goal']}")
+    all_ok = True
+    control_script = Path(__file__).resolve()
+
+    for i, step in enumerate(plan["steps"], start=1):
+        action = {
+            "intent": step["step"],
+            "resolved_args": step["command_args"],
+            "command": [sys.executable, str(control_script), *step["command_args"]],
+        }
+        result = run_tool_action(action, dry_run=args.dry_run)
+        step_ok = result.get("ok", False)
+        all_ok = all_ok and step_ok
+        print(f"{i}. {step['step']} -> {'OK' if step_ok else 'FAIL'}")
+        append_event(
+            EVENT_LOG_PATH,
+            "plan_step_executed",
+            {
+                "goal": plan["goal"],
+                "step_index": i,
+                "step": step["step"],
+                "ok": step_ok,
+                "returncode": result.get("returncode"),
+            },
+        )
+
+    append_event(
+        EVENT_LOG_PATH,
+        "plan_execution_finished",
+        {"goal": plan["goal"], "ok": all_ok, "dry_run": args.dry_run},
+    )
+    print(f"Final result: {'OK' if all_ok else 'FAIL'}")
+
+
 def print_status(status: dict):
     print("--- HCB STATUS ---")
     print(f"Timestamp: {status['timestamp']}")
@@ -422,6 +516,43 @@ def build_parser():
     ai_test.add_argument("--prompt", required=True)
     ai_test.add_argument("--write-report", action="store_true")
     ai_test.set_defaults(func=command_ai_test)
+
+    event_parser = subparsers.add_parser("event", help="event bus operations")
+    event_sub = event_parser.add_subparsers(dest="event_command", required=True)
+
+    event_emit = event_sub.add_parser("emit", help="append an event to event bus")
+    event_emit.add_argument("--event-type", required=True)
+    event_emit.add_argument("--note", default="")
+    event_emit.set_defaults(func=command_event_emit)
+
+    event_tail = event_sub.add_parser("tail", help="read recent events")
+    event_tail.add_argument("--limit", type=int, default=20)
+    event_tail.set_defaults(func=command_event_tail)
+
+    concept_parser = subparsers.add_parser("concept", help="concept registry operations")
+    concept_sub = concept_parser.add_subparsers(dest="concept_command", required=True)
+
+    concept_add = concept_sub.add_parser("add", help="add or update a concept")
+    concept_add.add_argument("--name", required=True)
+    concept_add.add_argument("--hypothesis", required=True)
+    concept_add.add_argument("--status", default="draft")
+    concept_add.add_argument("--evidence", default="")
+    concept_add.set_defaults(func=command_concept_add)
+
+    concept_list = concept_sub.add_parser("list", help="list registered concepts")
+    concept_list.set_defaults(func=command_concept_list)
+
+    kernel_parser = subparsers.add_parser("kernel", help="planner kernel operations")
+    kernel_sub = kernel_parser.add_subparsers(dest="kernel_command", required=True)
+
+    kernel_plan = kernel_sub.add_parser("plan", help="build a plan from a goal")
+    kernel_plan.add_argument("--goal", required=True)
+    kernel_plan.set_defaults(func=command_kernel_plan)
+
+    kernel_exec = kernel_sub.add_parser("execute", help="execute planned steps from a goal")
+    kernel_exec.add_argument("--goal", required=True)
+    kernel_exec.add_argument("--dry-run", action="store_true")
+    kernel_exec.set_defaults(func=command_kernel_execute)
 
     return parser
 

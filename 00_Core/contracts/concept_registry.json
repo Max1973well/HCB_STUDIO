@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "concepts": [
+    {
+      "name": "brilho",
+      "hypothesis": "Fluorescencia cognitiva reduz ruído antes da busca",
+      "status": "validated",
+      "evidence": "checkpoints multi-IA janeiro/fevereiro",
+      "created_at": "2026-03-02T20:24:14",
+      "updated_at": "2026-03-02T20:24:14"
+    }
+  ]
+}
