@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# CMake / C++ build artifacts
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.tlog
+*.vcxproj.user
+*.sln.docstates
+
+# Rust build artifacts
+target/
+00_Core/engines/rust_safe/hcb_cortex/
+
+# Logs and temporary runtime artifacts
+*.log
+*.tmp

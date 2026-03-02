@@ -1,0 +1,20 @@
+{
+  "system_identity": "HCB_STUDIO_ARCHIE",
+  "status": "ONLINE",
+  "role": "Orquestrador de Alta Performance",
+  "protocol_level": "Admin",
+  "stats": {
+    "total_files_processed": 3,
+    "last_activity": "2026-02-21 01:43:01",
+    "last_file_seen": "mMinha senha do banco é 1..txt"
+  },
+  "paths": {
+    "quarantine": "F:\\HCB_STUDIO\\04_TEMP\\Quarentena",
+    "root": "F:\\HCB_STUDIO",
+    "vault": "F:\\HCB_STUDIO\\02_STORAGE\\arquivo_morto"
+  },
+  "policies": {
+    "deletion": "REQUIRE_CONFIRMATION",
+    "sanitation_days": 30
+  }
+}

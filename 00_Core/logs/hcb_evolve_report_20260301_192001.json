@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-03-01T19:19:59",
+  "mode": "smart",
+  "cycles": 1,
+  "trained": false,
+  "status_before": {
+    "timestamp": "2026-03-01T19:19:59",
+    "root": "F:\\HCB_STUDIO",
+    "temp_exists": true,
+    "storage_exists": true,
+    "temp_file_count": 0,
+    "storage_file_count": 57,
+    "storage_breakdown": {
+      "AI_Classified_FINANCEIRO": 2,
+      "arquivo_morto": 0,
+      "Contexto_FINANCEIRO": 16,
+      "Documentos": 1,
+      "Midia_Automatica": 4,
+      "snapshots": 0,
+      "Triagem_Geral": 34
+    },
+    "brain_model_exists": true,
+    "vectorizer_exists": true,
+    "bridge_dll_exists": true,
+    "native_sum_dll_exists": true
+  },
+  "status_after": {
+    "timestamp": "2026-03-01T19:20:01",
+    "root": "F:\\HCB_STUDIO",
+    "temp_exists": true,
+    "storage_exists": true,
+    "temp_file_count": 0,
+    "storage_file_count": 57,
+    "storage_breakdown": {
+      "AI_Classified_FINANCEIRO": 2,
+      "arquivo_morto": 0,
+      "Contexto_FINANCEIRO": 16,
+      "Documentos": 1,
+      "Midia_Automatica": 4,
+      "snapshots": 0,
+      "Triagem_Geral": 34
+    },
+    "brain_model_exists": true,
+    "vectorizer_exists": true,
+    "bridge_dll_exists": true,
+    "native_sum_dll_exists": true
+  }
+}

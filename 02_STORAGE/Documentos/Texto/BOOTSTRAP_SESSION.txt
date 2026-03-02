@@ -1,0 +1,52 @@
+BOOTSTRAP SESSION - HCB DRIVE TOOLS (CROSS MACHINE / CROSS CHAT)
+
+Objetivo:
+Reiniciar o trabalho em outra maquina/instancia mantendo a mesma linha de raciocinio e as mesmas regras operacionais.
+
+Como usar:
+1) Abra este repositorio no VS Code.
+2) Inicie o chat com a IA.
+3) Cole o bloco "PROMPT DE BOOTSTRAP" abaixo.
+4) Valide o blueprint antes de qualquer mudanca.
+
+PROMPT DE BOOTSTRAP (colar no inicio de um chat novo)
+------------------------------------------------------
+Carregue obrigatoriamente, nesta ordem:
+1. context_hcb/Maxwell.json
+2. context_hcb/HCB_Protocol.json
+3. context_hcb/Blueprint_HCB_Studio.json
+
+Regras de operacao:
+- Use context_hcb/Blueprint_HCB_Studio.json como fonte canonica do projeto.
+- Nao alterar escopo, North Star ou regras de sessao IA unica sem DECISAO_HUMANA.
+- Nao inventar requisitos. Quando faltar dado, marcar como DESCONHECIDO.
+- Quando houver inferencia, marcar explicitamente como INFERENCIA.
+- Registrar decisoes novas em decision_log (formato DEC-XXX).
+- Validar blueprint antes de build/release.
+
+Agora, confirme:
+1) arquivos carregados na ordem correta;
+2) versao atual do blueprint;
+3) open_decisions pendentes;
+4) proximo passo objetivo sem interpretacao livre.
+------------------------------------------------------
+
+Checklist de continuidade entre maquinas:
+- context_hcb/Maxwell.json
+- context_hcb/HCB_Protocol.json
+- context_hcb/Blueprint_HCB_Studio.json
+- context_hcb/Blueprint_HCB_Studio.schema.json
+- validate_blueprint.py
+- timekeeper_state.json (opcional, para continuidade temporal)
+- hcb_drive_log.json (opcional, historico operacional)
+
+Comando de validacao:
+- C:\Python314\python.exe validate_blueprint.py
+
+Resultado esperado:
+- "VALIDACAO OK: blueprint compativel com schema."
+
+Se falhar:
+1) Corrigir o JSON do blueprint.
+2) Revalidar.
+3) So depois seguir com build/implementacao.
