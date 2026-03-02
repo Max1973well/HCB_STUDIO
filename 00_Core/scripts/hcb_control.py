@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
+from arms.arm_tool_runner import build_tool_action, run_tool_action
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMP_DIR = ROOT / "04_TEMP"
@@ -133,6 +135,59 @@ def command_napkin(args):
         report_path = LOG_DIR / f"hcb_napkin_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         report_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Report written to: {report_path}")
+
+
+def command_arm_tool(args):
+    control_script = Path(__file__).resolve()
+    action = build_tool_action(args.intent, control_script)
+    result = run_tool_action(action, dry_run=args.dry_run)
+
+    print("--- HCB ARM TOOL RUNNER ---")
+    print(f"Intent: {result['intent']}")
+    print(f"Resolved args: {result['resolved_args']}")
+    print(f"Command: {result['command_pretty']}")
+    print(f"Dry run: {result['dry_run']}")
+    print(f"Result: {'OK' if result['ok'] else 'FAIL'} (rc={result['returncode']})")
+
+    if result["stdout"]:
+        print("\nstdout:")
+        print(result["stdout"])
+    if result["stderr"]:
+        print("\nstderr:")
+        print(result["stderr"])
+
+
+def command_arm_memory_save(args):
+    path = save_capsule(
+        root=ROOT,
+        modulo=args.modulo,
+        atividade=args.atividade,
+        comentarios=args.comentarios,
+        ia_origem=args.source,
+    )
+    print(f"Capsule saved: {path}")
+
+
+def _print_capsule_rows(rows: list[dict]):
+    if not rows:
+        print("(none)")
+        return
+    for row in rows:
+        print(
+            f"- {row.get('timestamp')} | {row.get('modulo')} | {row.get('atividade')} | {row.get('path')}"
+        )
+
+
+def command_arm_memory_list(args):
+    rows = list_capsules(ROOT, limit=args.limit)
+    print("--- HCB ARM MEMORY LIST ---")
+    _print_capsule_rows(rows)
+
+
+def command_arm_memory_find(args):
+    rows = find_capsules(ROOT, query=args.query, limit=args.limit)
+    print(f"--- HCB ARM MEMORY FIND: '{args.query}' ---")
+    _print_capsule_rows(rows)
 
 
 def print_status(status: dict):
@@ -265,6 +320,36 @@ def build_parser():
     napkin_parser.add_argument("--path", default=str(NAPKIN_CHECKPOINT_DIR))
     napkin_parser.add_argument("--write-report", action="store_true")
     napkin_parser.set_defaults(func=command_napkin)
+
+    arm_tool_parser = subparsers.add_parser(
+        "arm-tool",
+        help="run first operational arm: map an intent to a control action",
+    )
+    arm_tool_parser.add_argument("intent")
+    arm_tool_parser.add_argument("--dry-run", action="store_true")
+    arm_tool_parser.set_defaults(func=command_arm_tool)
+
+    arm_memory_parser = subparsers.add_parser(
+        "arm-memory",
+        help="memory fabric arm: save/list/find capsules for HCB Studio",
+    )
+    arm_memory_sub = arm_memory_parser.add_subparsers(dest="arm_memory_command", required=True)
+
+    arm_memory_save = arm_memory_sub.add_parser("save", help="save a capsule")
+    arm_memory_save.add_argument("--modulo", required=True)
+    arm_memory_save.add_argument("--atividade", required=True)
+    arm_memory_save.add_argument("--comentarios", default="")
+    arm_memory_save.add_argument("--source", default="HCB-Control")
+    arm_memory_save.set_defaults(func=command_arm_memory_save)
+
+    arm_memory_list = arm_memory_sub.add_parser("list", help="list saved capsules")
+    arm_memory_list.add_argument("--limit", type=int, default=20)
+    arm_memory_list.set_defaults(func=command_arm_memory_list)
+
+    arm_memory_find = arm_memory_sub.add_parser("find", help="search capsules by query")
+    arm_memory_find.add_argument("--query", required=True)
+    arm_memory_find.add_argument("--limit", type=int, default=20)
+    arm_memory_find.set_defaults(func=command_arm_memory_find)
 
     return parser
 

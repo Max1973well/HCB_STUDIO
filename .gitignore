@@ -41,3 +41,4 @@ target/
 *.log
 *.tmp
 00_Core/logs/hcb_napkin_summary_*.json
+01_Archivus/capsules/
