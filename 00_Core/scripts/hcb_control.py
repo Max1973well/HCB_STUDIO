@@ -14,6 +14,7 @@ ENGINES_DIR = ROOT / "00_Core" / "engines"
 LOG_DIR = ROOT / "00_Core" / "logs"
 
 SENTINEL_SRC = ROOT / "03_TRAINING" / "PRJ_02_SENTINEL" / "src"
+NAPKIN_CHECKPOINT_DIR = Path(r"F:\PrimeiroProjetoTest\checkpoints")
 
 
 def ensure_import_path():
@@ -53,6 +54,85 @@ def build_status() -> dict:
         "bridge_dll_exists": (ENGINES_DIR / "hcb_bridge.dll").exists(),
         "native_sum_dll_exists": (ENGINES_DIR / "cpp_native" / "bin" / "hcb_core.dll").exists(),
     }
+
+
+def summarize_napkin(checkpoint_dir: Path) -> dict:
+    if not checkpoint_dir.exists():
+        return {
+            "checkpoint_dir": str(checkpoint_dir),
+            "exists": False,
+            "json_files": 0,
+            "latest_timestamp": None,
+            "key_modules": [],
+        }
+
+    files = sorted(checkpoint_dir.glob("*.json"))
+    modules = {}
+    latest = None
+    latest_file = None
+
+    for file in files:
+        try:
+            payload = json.loads(file.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            continue
+
+        module = (
+            payload.get("modulo")
+            or payload.get("module")
+            or payload.get("capsule_id")
+            or "unknown"
+        )
+        modules[module] = modules.get(module, 0) + 1
+
+        ts = payload.get("timestamp")
+        if isinstance(ts, str):
+            normalized = ts.replace("Z", "+00:00")
+            try:
+                dt = datetime.fromisoformat(normalized)
+                if dt.tzinfo is not None:
+                    dt_cmp = dt.astimezone().replace(tzinfo=None)
+                else:
+                    dt_cmp = dt
+
+                if latest is None or dt_cmp > latest:
+                    latest = dt_cmp
+                    latest_file = file.name
+            except ValueError:
+                pass
+
+    top_modules = sorted(modules.items(), key=lambda x: x[1], reverse=True)[:10]
+    return {
+        "checkpoint_dir": str(checkpoint_dir),
+        "exists": True,
+        "json_files": len(files),
+        "latest_timestamp": latest.isoformat() if latest else None,
+        "latest_file": latest_file,
+        "key_modules": [{"module": m, "count": c} for m, c in top_modules],
+    }
+
+
+def command_napkin(args):
+    checkpoint_dir = Path(args.path)
+    summary = summarize_napkin(checkpoint_dir)
+    print("--- HCB NAPKIN SUMMARY ---")
+    print(f"Path: {summary['checkpoint_dir']}")
+    print(f"Exists: {summary['exists']}")
+    print(f"JSON files: {summary['json_files']}")
+    print(f"Latest timestamp: {summary['latest_timestamp']}")
+    print(f"Latest file: {summary.get('latest_file')}")
+    print("Key modules:")
+    if not summary["key_modules"]:
+        print("  (none)")
+    else:
+        for item in summary["key_modules"]:
+            print(f"  - {item['module']}: {item['count']}")
+
+    if args.write_report:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        report_path = LOG_DIR / f"hcb_napkin_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        report_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Report written to: {report_path}")
 
 
 def print_status(status: dict):
@@ -177,6 +257,14 @@ def build_parser():
     evolve_parser.add_argument("--interval", type=float, default=0.0)
     evolve_parser.add_argument("--train-first", action="store_true")
     evolve_parser.set_defaults(func=command_evolve)
+
+    napkin_parser = subparsers.add_parser(
+        "napkin",
+        help="summarize external checkpoint capsules (guardanapo do cientista)",
+    )
+    napkin_parser.add_argument("--path", default=str(NAPKIN_CHECKPOINT_DIR))
+    napkin_parser.add_argument("--write-report", action="store_true")
+    napkin_parser.set_defaults(func=command_napkin)
 
     return parser
 
