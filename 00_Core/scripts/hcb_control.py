@@ -18,6 +18,12 @@ from arms.arm_tool_runner import build_tool_action, run_tool_action
 from arms.event_bus import append_event, read_recent_events
 from arms.planner_kernel import build_plan
 from arms.arm_09_prompt_writer import generate_production_prompts
+from arms.arm_10_block_organizer import (
+    create_project,
+    ingest_prompt_blocks,
+    list_projects,
+    update_block,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMP_DIR = ROOT / "04_TEMP"
@@ -466,6 +472,82 @@ def command_prompt_generate(args):
     print(f"\nPrompt artifact saved to: {out_file}", file=sys.stderr)
 
 
+def command_organizer_create_project(args):
+    project = create_project(
+        STORAGE_DIR,
+        project_id=args.project_id,
+        project_drawer=args.project_drawer,
+        name=args.name,
+        goal=args.goal,
+    )
+    append_event(
+        EVENT_LOG_PATH,
+        "arm10_project_created",
+        {
+            "project_id": project["project_id"],
+            "project_drawer": project["project_drawer"],
+        },
+    )
+    print("--- HCB ARM 10: CREATE PROJECT ---")
+    print(json.dumps(project, indent=2, ensure_ascii=False))
+
+
+def command_organizer_ingest(args):
+    result = ingest_prompt_blocks(
+        STORAGE_DIR,
+        project_drawer=args.project_drawer,
+        block_id=args.block_id,
+    )
+    append_event(
+        EVENT_LOG_PATH,
+        "arm10_blocks_ingested",
+        {
+            "project_drawer": result["project_drawer"],
+            "ingested_count": result["ingested_count"],
+        },
+    )
+    print("--- HCB ARM 10: INGEST BLOCKS ---")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def command_organizer_update_block(args):
+    result = update_block(
+        STORAGE_DIR,
+        project_drawer=args.project_drawer,
+        block_id=args.block_id,
+        status=args.status,
+        file_reference=args.file_reference,
+        track=args.track,
+        in_point_ms=args.in_point_ms,
+        out_point_ms=args.out_point_ms,
+        source_ai=args.source_ai,
+        notes=args.notes,
+    )
+    append_event(
+        EVENT_LOG_PATH,
+        "arm10_block_updated",
+        {
+            "project_drawer": args.project_drawer,
+            "block_id": args.block_id,
+            "status": result.get("status"),
+        },
+    )
+    print("--- HCB ARM 10: UPDATE BLOCK ---")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def command_organizer_list_projects(_args):
+    rows = list_projects(STORAGE_DIR)
+    print("--- HCB ARM 10: PROJECTS ---")
+    if not rows:
+        print("(none)")
+        return
+    for row in rows:
+        print(
+            f"- {row.get('project_drawer')} | {row.get('nome')} | {row.get('estado_global')} | {row.get('timeline_file')}"
+        )
+
+
 def print_status(status: dict):
     print("--- HCB STATUS ---")
     print(f"Timestamp: {status['timestamp']}")
@@ -700,6 +782,36 @@ def build_parser():
     prompt_gen.add_argument("--target", required=True, help="the target AI tool (midjourney, elevenlabs, etc)")
     prompt_gen.add_argument("--language", default="en", help="the language of the final generated prompt")
     prompt_gen.set_defaults(func=command_prompt_generate)
+
+    organizer_parser = subparsers.add_parser("organizer", help="Arm 10 Production Block Organizer operations")
+    organizer_sub = organizer_parser.add_subparsers(dest="organizer_command", required=True)
+
+    organizer_create = organizer_sub.add_parser("create-project", help="create a dedicated project drawer")
+    organizer_create.add_argument("--project-id", required=True)
+    organizer_create.add_argument("--project-drawer", required=True)
+    organizer_create.add_argument("--name", required=True)
+    organizer_create.add_argument("--goal", required=True)
+    organizer_create.set_defaults(func=command_organizer_create_project)
+
+    organizer_ingest = organizer_sub.add_parser("ingest", help="ingest Arm 09 prompt blocks into a project")
+    organizer_ingest.add_argument("--project-drawer", required=True)
+    organizer_ingest.add_argument("--block-id", default=None)
+    organizer_ingest.set_defaults(func=command_organizer_ingest)
+
+    organizer_update = organizer_sub.add_parser("update-block", help="update a block inside a project timeline")
+    organizer_update.add_argument("--project-drawer", required=True)
+    organizer_update.add_argument("--block-id", required=True)
+    organizer_update.add_argument("--status", default=None)
+    organizer_update.add_argument("--file-reference", default=None)
+    organizer_update.add_argument("--track", default=None)
+    organizer_update.add_argument("--in-point-ms", type=int, default=None)
+    organizer_update.add_argument("--out-point-ms", type=int, default=None)
+    organizer_update.add_argument("--source-ai", default=None)
+    organizer_update.add_argument("--notes", default=None)
+    organizer_update.set_defaults(func=command_organizer_update_block)
+
+    organizer_list = organizer_sub.add_parser("list-projects", help="list organizer projects")
+    organizer_list.set_defaults(func=command_organizer_list_projects)
 
     return parser
 

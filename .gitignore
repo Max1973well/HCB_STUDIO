@@ -46,5 +46,7 @@ target/
 00_Core/logs/audit_envelope.jsonl
 00_Core/dist/
 04_TEMP/plan_*.json
+02_STORAGE/blocks/
 02_STORAGE/checkpoints/ckpt_*.json
+02_STORAGE/projects/
 01_Archivus/capsules/
