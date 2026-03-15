@@ -280,6 +280,9 @@ def command_event_emit(args):
 
 def command_event_tail(args):
     rows = read_recent_events(EVENT_LOG_PATH, limit=args.limit)
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
     print(f"--- HCB EVENT TAIL (last {args.limit}) ---")
     if not rows:
         print("(none)")
@@ -305,8 +308,11 @@ def command_concept_add(args):
     print(json.dumps(concept, indent=2, ensure_ascii=False))
 
 
-def command_concept_list(_args):
+def command_concept_list(args):
     concepts = list_concepts(CONCEPT_REGISTRY_PATH)
+    if getattr(args, "json", False):
+        print(json.dumps(concepts, indent=2, ensure_ascii=False))
+        return
     print("--- HCB CONCEPTS ---")
     if not concepts:
         print("(none)")
@@ -546,11 +552,29 @@ def command_coordinator_run_safe(args):
             command_args=["status", "--json-only"],
             source="coordinator_safe_status",
         )
-    else:
+    elif args.action == "ai-status":
         command_record = _build_cli_proxy_command(
             action="ai_status",
             command_args=["ai", "status", "--json"],
             source="coordinator_safe_ai_status",
+        )
+    elif args.action == "event-tail":
+        command_record = _build_cli_proxy_command(
+            action="event_tail",
+            command_args=["event", "tail", "--limit", str(args.limit), "--json"],
+            source="coordinator_safe_event_tail",
+        )
+    elif args.action == "concept-list":
+        command_record = _build_cli_proxy_command(
+            action="concept_list",
+            command_args=["concept", "list", "--json"],
+            source="coordinator_safe_concept_list",
+        )
+    else:
+        command_record = _build_cli_proxy_command(
+            action="organizer_list_projects",
+            command_args=["organizer", "list-projects", "--json"],
+            source="coordinator_safe_organizer_list",
         )
 
     result = _run_rust_coordinator(command_record)
@@ -563,7 +587,7 @@ def command_coordinator_run_safe(args):
             "status": result.get("status"),
         },
     )
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=True))
 
 
 def command_checkpoint(args):
@@ -669,8 +693,11 @@ def command_organizer_update_block(args):
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
-def command_organizer_list_projects(_args):
+def command_organizer_list_projects(args):
     rows = list_projects(STORAGE_DIR)
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
     print("--- HCB ARM 10: PROJECTS ---")
     if not rows:
         print("(none)")
@@ -904,6 +931,7 @@ def build_parser():
 
     event_tail = event_sub.add_parser("tail", help="read recent events")
     event_tail.add_argument("--limit", type=int, default=20)
+    event_tail.add_argument("--json", action="store_true", help="print only raw events json")
     event_tail.set_defaults(func=command_event_tail)
 
     concept_parser = subparsers.add_parser("concept", help="concept registry operations")
@@ -917,6 +945,7 @@ def build_parser():
     concept_add.set_defaults(func=command_concept_add)
 
     concept_list = concept_sub.add_parser("list", help="list registered concepts")
+    concept_list.add_argument("--json", action="store_true", help="print only raw concepts json")
     concept_list.set_defaults(func=command_concept_list)
 
     kernel_parser = subparsers.add_parser("kernel", help="planner kernel operations")
@@ -946,7 +975,12 @@ def build_parser():
         "run-safe",
         help="execute a safe Studio command through the Rust coordinator",
     )
-    coordinator_safe.add_argument("--action", choices=["status", "ai-status"], required=True)
+    coordinator_safe.add_argument(
+        "--action",
+        choices=["status", "ai-status", "event-tail", "concept-list", "organizer-list-projects"],
+        required=True,
+    )
+    coordinator_safe.add_argument("--limit", type=int, default=10, help="used by event-tail")
     coordinator_safe.set_defaults(func=command_coordinator_run_safe)
 
     checkpoint_parser = subparsers.add_parser("checkpoint", help="persist continuity capsule at each stop")
@@ -991,6 +1025,7 @@ def build_parser():
     organizer_update.set_defaults(func=command_organizer_update_block)
 
     organizer_list = organizer_sub.add_parser("list-projects", help="list organizer projects")
+    organizer_list.add_argument("--json", action="store_true", help="print only raw projects json")
     organizer_list.set_defaults(func=command_organizer_list_projects)
 
     organizer_scan = organizer_sub.add_parser("scan-assets", help="scan project asset inbox and auto-mark generated blocks")
