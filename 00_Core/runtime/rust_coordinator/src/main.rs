@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::time::{sleep, Duration};
@@ -127,6 +128,88 @@ async fn execute_command(command: &CommandEnvelope) -> ResultEnvelope {
                 }),
                 None,
             )
+        }
+        "run_cli_command" => {
+            let program = command
+                .payload
+                .get("program")
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+            let args: Vec<String> = command
+                .payload
+                .get("args")
+                .and_then(|value| value.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let parse_json_stdout = command
+                .payload
+                .get("parse_json_stdout")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
+
+            if program.is_empty() {
+                (
+                    "failure".to_string(),
+                    json!({
+                        "action": command.action,
+                        "intent": command.intent,
+                        "received_from": command.metadata.source,
+                    }),
+                    Some("payload.program is required".to_string()),
+                )
+            } else {
+                match Command::new(program).args(&args).output() {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                        let parsed_stdout = if parse_json_stdout {
+                            serde_json::from_str::<Value>(&stdout).ok()
+                        } else {
+                            None
+                        };
+
+                        (
+                            if output.status.success() {
+                                "success".to_string()
+                            } else {
+                                "failure".to_string()
+                            },
+                            json!({
+                                "action": command.action,
+                                "intent": command.intent,
+                                "received_from": command.metadata.source,
+                                "program": program,
+                                "args": args,
+                                "returncode": output.status.code(),
+                                "stdout": stdout,
+                                "stderr": stderr,
+                                "parsed_stdout": parsed_stdout,
+                            }),
+                            if output.status.success() {
+                                None
+                            } else {
+                                Some(format!("cli command failed with return code {:?}", output.status.code()))
+                            },
+                        )
+                    }
+                    Err(error) => (
+                        "failure".to_string(),
+                        json!({
+                            "action": command.action,
+                            "intent": command.intent,
+                            "received_from": command.metadata.source,
+                            "program": program,
+                            "args": args,
+                        }),
+                        Some(format!("failed to execute cli command: {error}")),
+                    ),
+                }
+            }
         }
         other => {
             sleep(Duration::from_millis(10)).await;

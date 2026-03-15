@@ -77,6 +77,8 @@ def build_block_table(timeline_payload):
                 "Tipo": block.get("tipo_de_ativo"),
                 "Track": block.get("track"),
                 "Status": block.get("status"),
+                "Papel": block.get("semantic_role"),
+                "Motivo": block.get("dependency_reason"),
                 "AI": block.get("source_ai") or block.get("ferramenta_destino"),
                 "Dependencias": ", ".join(block.get("dependencies", [])),
                 "IN(ms)": block.get("in_point_ms"),
@@ -194,7 +196,9 @@ else:
     p2.metric("Estado", selected_project.get("estado_global", "unknown"))
     summary = selected_project.get("assets_summary", {})
     p3.metric("Assets", sum(summary.values()) if isinstance(summary, dict) else 0)
-    p4.metric("Export", ", ".join(selected_project.get("export_targets", ["json_interno"])))
+    p4.metric("Dominio", selected_project.get("domain_profile", "general"))
+
+    st.caption(f"Export: {', '.join(selected_project.get('export_targets', ['json_interno']))}")
 
     timeline_payload = load_timeline(STORAGE_PATH, selected_drawer)
     st.caption(

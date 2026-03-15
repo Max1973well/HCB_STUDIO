@@ -229,12 +229,22 @@ def command_ai_status(_args):
         save_engine_config(AI_ENGINE_CONFIG, cfg)
     active = cfg.get("active_provider")
     p = (cfg.get("providers") or {}).get(active, {})
+    payload = {
+        "config": str(AI_ENGINE_CONFIG),
+        "active_provider": active,
+        "model": p.get("model"),
+        "enabled": p.get("enabled"),
+        "api_key_env": p.get("api_key_env"),
+    }
+    if getattr(_args, "json", False):
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
     print("--- HCB AI ENGINE STATUS ---")
-    print(f"Config: {AI_ENGINE_CONFIG}")
-    print(f"Active provider: {active}")
-    print(f"Model: {p.get('model')}")
-    print(f"Enabled: {p.get('enabled')}")
-    print(f"API key env: {p.get('api_key_env')}")
+    print(f"Config: {payload['config']}")
+    print(f"Active provider: {payload['active_provider']}")
+    print(f"Model: {payload['model']}")
+    print(f"Enabled: {payload['enabled']}")
+    print(f"API key env: {payload['api_key_env']}")
 
 
 def command_ai_set(args):
@@ -378,6 +388,27 @@ def _build_command_record(goal: str, source: str = "cli_planner") -> dict:
     }
 
 
+def _build_cli_proxy_command(action: str, command_args: list[str], source: str) -> dict:
+    import uuid
+    from datetime import datetime, timezone
+
+    control_script = Path(__file__).resolve()
+    return {
+        "command_id": str(uuid.uuid4()),
+        "intent": f"rust_proxy::{action}",
+        "action": "run_cli_command",
+        "payload": {
+            "program": sys.executable,
+            "args": [str(control_script), *command_args],
+            "parse_json_stdout": True,
+        },
+        "metadata": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": source,
+        },
+    }
+
+
 def _run_rust_coordinator(command_record: dict) -> dict:
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     command_path = TEMP_DIR / f"coordinator_command_{command_record['command_id']}.json"
@@ -506,6 +537,33 @@ def command_coordinator_demo(_args):
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "Rust coordinator demo failed.")
     print(completed.stdout.strip())
+
+
+def command_coordinator_run_safe(args):
+    if args.action == "status":
+        command_record = _build_cli_proxy_command(
+            action="status",
+            command_args=["status", "--json-only"],
+            source="coordinator_safe_status",
+        )
+    else:
+        command_record = _build_cli_proxy_command(
+            action="ai_status",
+            command_args=["ai", "status", "--json"],
+            source="coordinator_safe_ai_status",
+        )
+
+    result = _run_rust_coordinator(command_record)
+    append_event(
+        EVENT_LOG_PATH,
+        "rust_coordinator_safe_action",
+        {
+            "command_id": command_record["command_id"],
+            "safe_action": args.action,
+            "status": result.get("status"),
+        },
+    )
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 def command_checkpoint(args):
@@ -689,6 +747,9 @@ def run_triage_cycle(mode: str):
 
 def command_status(args):
     status = build_status()
+    if getattr(args, "json_only", False):
+        print(json.dumps(status, indent=2, ensure_ascii=False))
+        return
     print_status(status)
     if args.json:
         print(json.dumps(status, indent=2, ensure_ascii=False))
@@ -756,6 +817,7 @@ def build_parser():
 
     status_parser = subparsers.add_parser("status", help="show system status")
     status_parser.add_argument("--json", action="store_true", help="print raw status json")
+    status_parser.add_argument("--json-only", action="store_true", help="print only raw status json")
     status_parser.set_defaults(func=command_status)
 
     train_parser = subparsers.add_parser("train", help="train and persist Sentinel brain")
@@ -819,6 +881,7 @@ def build_parser():
     ai_sub = ai_parser.add_subparsers(dest="ai_command", required=True)
 
     ai_status = ai_sub.add_parser("status", help="show active AI engine configuration")
+    ai_status.add_argument("--json", action="store_true", help="print only raw ai status json")
     ai_status.set_defaults(func=command_ai_status)
 
     ai_set = ai_sub.add_parser("set", help="set active AI provider/model")
@@ -878,6 +941,13 @@ def build_parser():
 
     coordinator_demo = coordinator_sub.add_parser("demo", help="run Rust coordinator demo loop")
     coordinator_demo.set_defaults(func=command_coordinator_demo)
+
+    coordinator_safe = coordinator_sub.add_parser(
+        "run-safe",
+        help="execute a safe Studio command through the Rust coordinator",
+    )
+    coordinator_safe.add_argument("--action", choices=["status", "ai-status"], required=True)
+    coordinator_safe.set_defaults(func=command_coordinator_run_safe)
 
     checkpoint_parser = subparsers.add_parser("checkpoint", help="persist continuity capsule at each stop")
     checkpoint_parser.add_argument("action", choices=["end-of-block"], help="the checkpoint action to perform")
