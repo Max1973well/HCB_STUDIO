@@ -22,6 +22,7 @@ from arms.arm_10_block_organizer import (
     create_project,
     ingest_prompt_blocks,
     list_projects,
+    scan_generated_assets,
     update_block,
 )
 
@@ -548,6 +549,20 @@ def command_organizer_list_projects(_args):
         )
 
 
+def command_organizer_scan_assets(args):
+    result = scan_generated_assets(STORAGE_DIR, project_drawer=args.project_drawer)
+    append_event(
+        EVENT_LOG_PATH,
+        "arm10_assets_scanned",
+        {
+            "project_drawer": result["project_drawer"],
+            "matched_count": result["matched_count"],
+        },
+    )
+    print("--- HCB ARM 10: SCAN ASSETS ---")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
 def print_status(status: dict):
     print("--- HCB STATUS ---")
     print(f"Timestamp: {status['timestamp']}")
@@ -812,6 +827,10 @@ def build_parser():
 
     organizer_list = organizer_sub.add_parser("list-projects", help="list organizer projects")
     organizer_list.set_defaults(func=command_organizer_list_projects)
+
+    organizer_scan = organizer_sub.add_parser("scan-assets", help="scan project asset inbox and auto-mark generated blocks")
+    organizer_scan.add_argument("--project-drawer", required=True)
+    organizer_scan.set_defaults(func=command_organizer_scan_assets)
 
     return parser
 

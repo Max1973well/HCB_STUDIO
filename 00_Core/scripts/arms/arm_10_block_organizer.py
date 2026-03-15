@@ -38,6 +38,10 @@ def _blocks_dir(storage_dir: Path, project_drawer: str) -> Path:
     return _project_root(storage_dir, project_drawer) / "blocks"
 
 
+def _assets_dir(storage_dir: Path, project_drawer: str) -> Path:
+    return _project_root(storage_dir, project_drawer) / "assets_inbox"
+
+
 def _prompt_queue_dir(storage_dir: Path) -> Path:
     return storage_dir / "blocks" / "prompt_queue"
 
@@ -76,6 +80,7 @@ def create_project(
     root = _project_root(storage_dir, project_drawer)
     root.mkdir(parents=True, exist_ok=True)
     _blocks_dir(storage_dir, project_drawer).mkdir(parents=True, exist_ok=True)
+    _assets_dir(storage_dir, project_drawer).mkdir(parents=True, exist_ok=True)
 
     timeline = {
         "project_id": project_id,
@@ -102,6 +107,7 @@ def create_project(
         "assets_summary": _empty_assets_summary(),
         "timeline_file": str(_timeline_file(storage_dir, project_drawer)),
         "block_queue_dir": str(_blocks_dir(storage_dir, project_drawer)),
+        "assets_inbox_dir": str(_assets_dir(storage_dir, project_drawer)),
         "export_targets": ["json_interno"],
     }
 
@@ -270,3 +276,56 @@ def list_projects(storage_dir: Path) -> list[dict]:
         except Exception:
             continue
     return results
+
+
+def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
+    project = load_project(storage_dir, project_drawer)
+    timeline = load_timeline(storage_dir, project_drawer)
+    inbox_dir = _assets_dir(storage_dir, project_drawer)
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+
+    files = [path for path in inbox_dir.iterdir() if path.is_file()]
+    matched = []
+
+    for block in timeline.get("blocks", []):
+        if block.get("status") not in {"prompt_pronto", "executando", "revisao"}:
+            continue
+
+        block_id = block.get("block_id", "")
+        prompt_origin_id = block.get("prompt_origin_id", "")
+        file_match = next(
+            (
+                path
+                for path in files
+                if block_id in path.name or (prompt_origin_id and prompt_origin_id in path.name)
+            ),
+            None,
+        )
+
+        if not file_match:
+            continue
+
+        block["file_reference"] = str(file_match)
+        block["status"] = "gerado"
+        if not block.get("source_ai"):
+            block["source_ai"] = block.get("ferramenta_destino", "")
+        matched.append(
+            {
+                "block_id": block_id,
+                "file_reference": str(file_match),
+                "status": block["status"],
+            }
+        )
+
+    if matched:
+        timeline["estado_global"] = "ativo"
+        project["estado_global"] = "ativo"
+        project["assets_summary"] = _count_assets(timeline["blocks"])
+        _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
+
+    return {
+        "project_drawer": project_drawer,
+        "assets_inbox_dir": str(inbox_dir),
+        "matched_count": len(matched),
+        "matched_blocks": matched,
+    }
