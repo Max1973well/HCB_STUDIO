@@ -148,18 +148,36 @@ if prompt:
 
 col_a, col_b = st.columns(2)
 with col_a:
-    if st.button("Salvar checkpoint da conversa"):
-        checkpoint = {
-            "id": f"vision_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            "modulo": "vision_chat_test",
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "atividade": "Conversa de teste UI -> API",
-            "mensagens": st.session_state.chat_messages[-10:],
-        }
-        out = ROOT / "00_Core" / "logs" / f"{checkpoint['id']}.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(checkpoint, indent=2, ensure_ascii=False), encoding="utf-8")
-        st.success(f"Checkpoint salvo: {out}")
+    st.caption("Cápsula só no encerramento/troca de sessão (não a cada mensagem).")
+    capsule_reason = st.selectbox(
+        "Motivo de cápsula",
+        [
+            "troca_de_chat",
+            "limite_de_contexto",
+            "troca_de_estudo_teacher",
+            "troca_de_pesquisa",
+            "troca_de_trabalho_producao",
+            "encerramento_manual",
+        ],
+    )
+    capsule_confirm = st.checkbox("Confirmo que a sessão será encerrada/trocada agora")
+    if st.button("Gerar cápsula de transição", disabled=not capsule_confirm):
+        if not st.session_state.chat_messages:
+            st.warning("Sem mensagens para encapsular nesta sessão.")
+        else:
+            checkpoint = {
+                "id": f"vision_session_capsule_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "modulo": "vision_session_transition",
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "atividade": "Capsula de transicao de sessao",
+                "motivo_transicao": capsule_reason,
+                "politica": "capsula_apenas_em_troca_ou_encerramento",
+                "mensagens": st.session_state.chat_messages[-20:],
+            }
+            out = ROOT / "00_Core" / "logs" / f"{checkpoint['id']}.json"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(checkpoint, indent=2, ensure_ascii=False), encoding="utf-8")
+            st.success(f"Cápsula de transição salva: {out}")
 
 with col_b:
     if st.button("Limpar conversa"):

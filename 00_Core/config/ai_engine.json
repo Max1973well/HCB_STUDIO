@@ -3,7 +3,7 @@
   "providers": {
     "gemini": {
       "enabled": true,
-      "model": "gemini-1.5-flash",
+      "model": "gemini-2.5-flash-lite",
       "api_key_env": "GEMINI_API_KEY",
       "temperature": 0.2
     }
