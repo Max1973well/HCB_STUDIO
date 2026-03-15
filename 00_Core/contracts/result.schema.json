@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Result",
+  "description": "Schema for execution results and audit evidence",
+  "type": "object",
+  "properties": {
+    "command_id": {
+      "type": "string",
+      "description": "ID of the command that generated this result"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failure", "partial"],
+      "description": "Final status of the command execution"
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Output data, logs, or artifacts generated during execution"
+    },
+    "error_details": {
+      "type": "string",
+      "description": "Detailed error message if execution failed"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Result metadata",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "number",
+          "description": "Execution duration in milliseconds"
+        }
+      },
+      "required": ["timestamp", "duration_ms"]
+    }
+  },
+  "required": ["command_id", "status", "evidence", "metadata"]
+}

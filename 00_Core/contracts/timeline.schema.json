@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TimelineProject",
+  "description": "Schema for Arm 10 Production Block Organizer timeline metadata.",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "project_drawer": {
+      "type": "string",
+      "description": "Dedicated drawer/gaveta for this project."
+    },
+    "nome": {
+      "type": "string"
+    },
+    "objetivo": {
+      "type": "string"
+    },
+    "estado_global": {
+      "type": "string",
+      "enum": ["draft", "ativo", "revisao", "concluido", "arquivado"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "timeline_policy": {
+      "type": "object",
+      "properties": {
+        "placement_mode": {
+          "type": "string",
+          "enum": ["automatico", "manual_revisado"]
+        },
+        "export_intent": {
+          "type": "string",
+          "enum": ["json_interno", "json_completo", "xml_futuro", "edl_futuro", "fcpxml_futuro"]
+        }
+      },
+      "required": ["placement_mode", "export_intent"]
+    },
+    "blocks": {
+      "type": "array",
+      "description": "List of temporally anchored assets on the timeline.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "block_id": {
+            "type": "string"
+          },
+          "prompt_origin_id": {
+            "type": "string",
+            "description": "ID from Arm 09 prompt block."
+          },
+          "tipo_de_ativo": {
+            "type": "string",
+            "enum": ["image", "video", "audio", "speech", "text"]
+          },
+          "ferramenta_destino": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string",
+            "enum": ["V1", "V2", "A1", "A2", "A3"]
+          },
+          "in_point_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "out_point_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "file_reference": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "prompt_pronto",
+              "executando",
+              "gerado",
+              "revisao",
+              "aprovado",
+              "concluido",
+              "descartado"
+            ]
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_ai": {
+            "type": "string",
+            "description": "External AI that generated the final asset."
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_id",
+          "prompt_origin_id",
+          "tipo_de_ativo",
+          "track",
+          "in_point_ms",
+          "out_point_ms",
+          "status"
+        ]
+      }
+    }
+  },
+  "required": [
+    "project_id",
+    "project_drawer",
+    "nome",
+    "objetivo",
+    "estado_global",
+    "created_at",
+    "updated_at",
+    "timeline_policy",
+    "blocks"
+  ]
+}

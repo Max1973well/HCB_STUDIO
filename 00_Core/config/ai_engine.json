@@ -3,8 +3,14 @@
   "providers": {
     "gemini": {
       "enabled": true,
-      "model": "gemini-2.5-flash-lite",
+      "model": "gemini-1.5-flash",
       "api_key_env": "GEMINI_API_KEY",
+      "temperature": 0.2
+    },
+    "ollama": {
+      "enabled": true,
+      "model": "dolphin-llama3:8b",
+      "endpoint": "http://127.0.0.1:11434/api/generate",
       "temperature": 0.2
     }
   }

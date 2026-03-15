@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PromptBlock",
+  "description": "Schema for Arm 09 prompt artifacts handed off to Arm 10.",
+  "type": "object",
+  "properties": {
+    "block_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_arm": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": ["prompt_pronto"]
+    },
+    "source_idea": {
+      "type": "string"
+    },
+    "tipo_de_ativo": {
+      "type": "string",
+      "enum": ["image", "video", "audio", "speech", "text"]
+    },
+    "ferramenta_destino": {
+      "type": "string"
+    },
+    "idioma_prompt": {
+      "type": "string"
+    },
+    "prompt_oficial": {
+      "type": "string"
+    },
+    "prompt_curto": {
+      "type": "string"
+    },
+    "checklist_validacao": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "observacoes_operacionais": {
+      "type": "string"
+    },
+    "organizer_hint": {
+      "type": "object",
+      "properties": {
+        "suggested_track": {
+          "type": "string",
+          "enum": ["V1", "V2", "A1", "A2", "A3"]
+        },
+        "asset_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["prompt_pronto"]
+        },
+        "next_arm": {
+          "type": "string"
+        }
+      },
+      "required": ["suggested_track", "asset_type", "status", "next_arm"]
+    },
+    "timeline_stub": {
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "track": {
+          "type": "string",
+          "enum": ["V1", "V2", "A1", "A2", "A3"]
+        },
+        "in_point_ms": {
+          "type": "integer"
+        },
+        "out_point_ms": {
+          "type": "integer"
+        },
+        "file_reference": {
+          "type": "string"
+        },
+        "prompt_origin_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["prompt_pronto"]
+        }
+      },
+      "required": ["block_id", "track", "in_point_ms", "out_point_ms", "prompt_origin_id", "status"]
+    },
+    "validation_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "engine_trace": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "block_id",
+    "created_at",
+    "source_arm",
+    "estado",
+    "source_idea",
+    "tipo_de_ativo",
+    "ferramenta_destino",
+    "idioma_prompt",
+    "prompt_oficial",
+    "prompt_curto",
+    "organizer_hint",
+    "timeline_stub"
+  ]
+}

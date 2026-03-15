@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Command",
+  "description": "Schema for commands issued to the HCB Studio Nervous System",
+  "type": "object",
+  "properties": {
+    "command_id": {
+      "type": "string",
+      "description": "Unique identifier for the command"
+    },
+    "intent": {
+      "type": "string",
+      "description": "High level intent or goal of the command"
+    },
+    "action": {
+      "type": "string",
+      "description": "Specific action to perform"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Action-specific parameters and data"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Execution metadata",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "type": "string",
+          "description": "Origin of the command (e.g., user_cli, automation_script)"
+        }
+      },
+      "required": ["timestamp", "source"]
+    }
+  },
+  "required": ["command_id", "intent", "action", "payload", "metadata"]
+}

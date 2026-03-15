@@ -17,6 +17,7 @@ from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
 from arms.event_bus import append_event, read_recent_events
 from arms.planner_kernel import build_plan
+from arms.arm_09_prompt_writer import generate_production_prompts
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMP_DIR = ROOT / "04_TEMP"
@@ -328,6 +329,11 @@ def command_kernel_execute(args):
                 "returncode": result.get("returncode"),
             },
         )
+        
+        if not step_ok:
+            print(f"❌ CRITICAL FAILURE at step {i}: {step['step']}. Halting and rolling back.")
+            _create_system_checkpoint(note=f"Rollback state after failure during: {step['step']}", retention_class="ephemeral")
+            break
 
     append_event(
         EVENT_LOG_PATH,
@@ -335,6 +341,129 @@ def command_kernel_execute(args):
         {"goal": plan["goal"], "ok": all_ok, "dry_run": args.dry_run},
     )
     print(f"Final result: {'OK' if all_ok else 'FAIL'}")
+    
+    if all_ok:
+        print("✅ Plan executed successfully. Generating final state checkpoint.")
+        _create_system_checkpoint(note=f"Successful execution of goal: {plan['goal']}", retention_class="ephemeral")
+
+
+def _create_system_checkpoint(note: str = "", retention_class: str = "ephemeral") -> dict:
+    import uuid
+    from datetime import datetime, timezone
+    
+    state_snap = build_status()
+    checkpoint_record = {
+        "checkpoint_id": str(uuid.uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "retention_class": retention_class,
+        "state": state_snap,
+        "context": {
+            "note": note
+        },
+        "next_actions": []
+    }
+    out_file = STORAGE_DIR / "checkpoints" / f"ckpt_{checkpoint_record['checkpoint_id']}.json"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(json.dumps(checkpoint_record, indent=2, ensure_ascii=False), encoding="utf-8")
+    
+    _cleanup_ephemeral_checkpoints()
+    
+    return checkpoint_record
+
+
+def _cleanup_ephemeral_checkpoints(limit: int = 15):
+    """Keeps only the latest N ephemeral checkpoints, ignores immortals."""
+    target_dir = STORAGE_DIR / "checkpoints"
+    if not target_dir.exists():
+        return
+        
+    ephemerals = []
+    
+    for file in target_dir.glob("ckpt_*.json"):
+        try:
+            payload = json.loads(file.read_text(encoding="utf-8", errors="ignore"))
+            if payload.get("retention_class") == "ephemeral":
+                ephemerals.append((file, file.stat().st_mtime))
+        except Exception:
+            pass
+            
+    # Sort backwards by time (newest first)
+    ephemerals.sort(key=lambda x: x[1], reverse=True)
+    
+    # Delete everything past the limit
+    for file, _ in ephemerals[limit:]:
+        try:
+            file.unlink(missing_ok=True)
+            print(f"Rotated out old ephemeral checkpoint: {file.name}")
+        except Exception as e:
+            print(f"Failed to delete old checkpoint {file}: {e}")
+
+def command_planner(args):
+    import uuid
+    from datetime import datetime, timezone
+    
+    plan = build_plan(args.goal)
+    
+    # Emit command.schema.json compliant record
+    command_record = {
+        "command_id": str(uuid.uuid4()),
+        "intent": args.goal,
+        "action": "execute_plan",
+        "payload": {
+            "steps": plan.get("steps", [])
+        },
+        "metadata": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "cli_planner"
+        }
+    }
+    
+    print(json.dumps(command_record, indent=2))
+    
+    # Optional: save to file
+    out_file = TEMP_DIR / f"plan_{command_record['command_id']}.json"
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(json.dumps(command_record, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Schema-compliant plan saved to {out_file}", file=sys.stderr)
+
+
+def command_checkpoint(args):
+    if args.action != "end-of-block":
+        print("Only end-of-block is supported currently.")
+        return
+
+    checkpoint_record = _create_system_checkpoint(note=args.note, retention_class="immortal")
+    print(json.dumps(checkpoint_record, indent=2))
+    print(f"Immortal Checkpoint saved.", file=sys.stderr)
+
+
+def command_prompt_generate(args):
+    payload = generate_production_prompts(
+        AI_ENGINE_CONFIG,
+        idea=args.idea,
+        target_tool=args.target,
+        language=args.language
+    )
+
+    blocks_dir = STORAGE_DIR / "blocks" / "prompt_queue"
+    blocks_dir.mkdir(parents=True, exist_ok=True)
+    out_file = blocks_dir / f"{payload['block_id']}.json"
+    out_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    append_event(
+        EVENT_LOG_PATH,
+        "prompt_block_generated",
+        {
+            "block_id": payload["block_id"],
+            "target_tool": payload["ferramenta_destino"],
+            "asset_type": payload["tipo_de_ativo"],
+            "validation_issues": payload.get("validation_issues", []),
+        },
+    )
+
+    print("--- HCB ARM 09: UNIVERSAL PROMPT WRITER ---")
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(f"\nPrompt artifact saved to: {out_file}", file=sys.stderr)
 
 
 def print_status(status: dict):
@@ -508,7 +637,7 @@ def build_parser():
     ai_status.set_defaults(func=command_ai_status)
 
     ai_set = ai_sub.add_parser("set", help="set active AI provider/model")
-    ai_set.add_argument("--provider", choices=["gemini"], default="gemini")
+    ai_set.add_argument("--provider", choices=["gemini", "ollama"], default="gemini")
     ai_set.add_argument("--model", default=None)
     ai_set.set_defaults(func=command_ai_set)
 
@@ -554,13 +683,65 @@ def build_parser():
     kernel_exec.add_argument("--dry-run", action="store_true")
     kernel_exec.set_defaults(func=command_kernel_execute)
 
+    planner_parser = subparsers.add_parser("planner", help="generate schema-compliant plan record")
+    planner_parser.add_argument("--goal", required=True)
+    planner_parser.set_defaults(func=command_planner)
+
+    checkpoint_parser = subparsers.add_parser("checkpoint", help="persist continuity capsule at each stop")
+    checkpoint_parser.add_argument("action", choices=["end-of-block"], help="the checkpoint action to perform")
+    checkpoint_parser.add_argument("--note", default="", help="optional context note")
+    checkpoint_parser.set_defaults(func=command_checkpoint)
+    
+    prompt_parser = subparsers.add_parser("prompt", help="Arm 09 Universal Prompt Writer operations")
+    prompt_sub = prompt_parser.add_subparsers(dest="prompt_command", required=True)
+    
+    prompt_gen = prompt_sub.add_parser("generate", help="generate production-ready prompts from a raw idea")
+    prompt_gen.add_argument("idea", help="the raw creative concept")
+    prompt_gen.add_argument("--target", required=True, help="the target AI tool (midjourney, elevenlabs, etc)")
+    prompt_gen.add_argument("--language", default="en", help="the language of the final generated prompt")
+    prompt_gen.set_defaults(func=command_prompt_generate)
+
     return parser
 
 
 def main():
+    import uuid
+    from datetime import datetime, timezone
+    
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    
+    # Setup audit envelope
+    command_id = str(uuid.uuid4())
+    start_time = time.time()
+    status = "success"
+    error_details = None
+    
+    try:
+        args.func(args)
+    except Exception as e:
+        status = "failure"
+        error_details = str(e)
+        raise
+    finally:
+        duration_ms = int((time.time() - start_time) * 1000)
+        audit_record = {
+            "command_id": command_id,
+            "status": status,
+            "evidence": {
+                "command": sys.argv[1:],
+            },
+            "error_details": error_details,
+            "metadata": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": duration_ms
+            }
+        }
+        
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        audit_log = LOG_DIR / "audit_envelope.jsonl"
+        with open(audit_log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(audit_record, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

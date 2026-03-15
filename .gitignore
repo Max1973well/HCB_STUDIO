@@ -43,5 +43,8 @@ target/
 00_Core/logs/hcb_napkin_summary_*.json
 00_Core/logs/event_bus.jsonl
 00_Core/logs/vision_chat_history.json
+00_Core/logs/audit_envelope.jsonl
 00_Core/dist/
+04_TEMP/plan_*.json
+02_STORAGE/checkpoints/ckpt_*.json
 01_Archivus/capsules/

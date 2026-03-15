@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BlockOrganizerProject",
+  "description": "Top-level project contract for Arm 10 Production Block Organizer.",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "project_drawer": {
+      "type": "string"
+    },
+    "nome": {
+      "type": "string"
+    },
+    "objetivo": {
+      "type": "string"
+    },
+    "estado_global": {
+      "type": "string",
+      "enum": ["draft", "ativo", "revisao", "concluido", "arquivado"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "assets_summary": {
+      "type": "object",
+      "properties": {
+        "image": { "type": "integer", "minimum": 0 },
+        "video": { "type": "integer", "minimum": 0 },
+        "audio": { "type": "integer", "minimum": 0 },
+        "speech": { "type": "integer", "minimum": 0 },
+        "text": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "timeline_file": {
+      "type": "string",
+      "description": "Reference to the timeline JSON maintained by Arm 10."
+    },
+    "block_queue_dir": {
+      "type": "string",
+      "description": "Directory where prompt and generated blocks are stored for this project."
+    },
+    "export_targets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["json_interno", "json_completo", "xml_futuro", "edl_futuro", "fcpxml_futuro"]
+      }
+    }
+  },
+  "required": [
+    "project_id",
+    "project_drawer",
+    "nome",
+    "objetivo",
+    "estado_global",
+    "created_at",
+    "updated_at",
+    "timeline_file",
+    "block_queue_dir"
+  ]
+}
