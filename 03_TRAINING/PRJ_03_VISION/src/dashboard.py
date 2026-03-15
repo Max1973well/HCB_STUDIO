@@ -21,6 +21,7 @@ if str(HCB_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(HCB_SCRIPTS))
 
 from arms.ai_engine import generate_with_active_provider, load_engine_config
+from arms.arm_10_block_organizer import list_projects, load_timeline
 
 
 st.set_page_config(
@@ -59,6 +60,24 @@ def save_chat_history(messages):
         "messages": messages,
     }
     AI_LOG_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def build_block_table(timeline_payload):
+    rows = []
+    for block in timeline_payload.get("blocks", []):
+        rows.append(
+            {
+                "Block": block.get("block_id"),
+                "Tipo": block.get("tipo_de_ativo"),
+                "Track": block.get("track"),
+                "Status": block.get("status"),
+                "AI": block.get("source_ai") or block.get("ferramenta_destino"),
+                "IN(ms)": block.get("in_point_ms"),
+                "OUT(ms)": block.get("out_point_ms"),
+                "Arquivo": block.get("file_reference"),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 st.title("👁️ HCB STUDIO: VISION DASHBOARD")
@@ -110,6 +129,41 @@ if STORAGE_PATH.exists():
         st.dataframe(df, use_container_width=True, height=280)
     else:
         st.info("Nenhum arquivo arquivado ainda.")
+
+st.markdown("---")
+st.subheader("🎬 Arm 10 | Projetos e Timeline")
+
+projects = list_projects(STORAGE_PATH)
+if not projects:
+    st.info("Nenhum projeto do Arm 10 encontrado ainda.")
+else:
+    project_labels = [
+        f"{project.get('project_drawer')} | {project.get('nome')} | {project.get('estado_global')}"
+        for project in projects
+    ]
+    selected_label = st.selectbox("Projeto ativo", project_labels)
+    selected_index = project_labels.index(selected_label)
+    selected_project = projects[selected_index]
+    selected_drawer = selected_project.get("project_drawer")
+
+    p1, p2, p3, p4 = st.columns(4)
+    p1.metric("Gaveta", selected_drawer)
+    p2.metric("Estado", selected_project.get("estado_global", "unknown"))
+    summary = selected_project.get("assets_summary", {})
+    p3.metric("Assets", sum(summary.values()) if isinstance(summary, dict) else 0)
+    p4.metric("Export", ", ".join(selected_project.get("export_targets", ["json_interno"])))
+
+    timeline_payload = load_timeline(STORAGE_PATH, selected_drawer)
+    st.caption(
+        f"Timeline: {timeline_payload.get('timeline_policy', {}).get('placement_mode', 'automatico')} | "
+        f"Projeto: {timeline_payload.get('nome', '')}"
+    )
+
+    block_df = build_block_table(timeline_payload)
+    if block_df.empty:
+        st.info("Timeline ainda sem blocos.")
+    else:
+        st.dataframe(block_df, use_container_width=True, height=240)
 
 st.markdown("---")
 st.subheader("🤖 Console IA (Teste)")
