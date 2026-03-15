@@ -22,6 +22,7 @@ from arms.arm_10_block_organizer import (
     create_project,
     ingest_prompt_blocks,
     list_projects,
+    refresh_dependencies,
     scan_generated_assets,
     update_block,
 )
@@ -563,6 +564,20 @@ def command_organizer_scan_assets(args):
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
+def command_organizer_refresh_dependencies(args):
+    result = refresh_dependencies(STORAGE_DIR, project_drawer=args.project_drawer)
+    append_event(
+        EVENT_LOG_PATH,
+        "arm10_dependencies_refreshed",
+        {
+            "project_drawer": result["project_drawer"],
+            "block_count": len(result["blocks"]),
+        },
+    )
+    print("--- HCB ARM 10: REFRESH DEPENDENCIES ---")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
 def print_status(status: dict):
     print("--- HCB STATUS ---")
     print(f"Timestamp: {status['timestamp']}")
@@ -831,6 +846,13 @@ def build_parser():
     organizer_scan = organizer_sub.add_parser("scan-assets", help="scan project asset inbox and auto-mark generated blocks")
     organizer_scan.add_argument("--project-drawer", required=True)
     organizer_scan.set_defaults(func=command_organizer_scan_assets)
+
+    organizer_refresh = organizer_sub.add_parser(
+        "refresh-dependencies",
+        help="recalculate block dependencies for a project timeline",
+    )
+    organizer_refresh.add_argument("--project-drawer", required=True)
+    organizer_refresh.set_defaults(func=command_organizer_refresh_dependencies)
 
     return parser
 

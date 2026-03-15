@@ -146,6 +146,59 @@ def _count_assets(blocks: list[dict]) -> dict:
     return summary
 
 
+def _track_priority(block: dict) -> tuple[int, int]:
+    asset_order = {"text": 0, "speech": 1, "image": 2, "video": 2, "audio": 3}
+    order = {"A1": 0, "V2": 1, "V1": 2, "A2": 3, "A3": 4}
+    asset_type = (block.get("tipo_de_ativo") or "").strip()
+    track = (block.get("track") or "").strip()
+    return (asset_order.get(asset_type, 99), order.get(track, 99), int(block.get("in_point_ms", 0)))
+
+
+def _is_ready_dependency_candidate(block: dict) -> bool:
+    return block.get("status") not in {"descartado", ""}
+
+
+def infer_block_dependencies(blocks: list[dict]) -> list[dict]:
+    ordered = sorted(blocks, key=_track_priority)
+    latest_text = None
+    latest_speech = None
+    latest_visual = None
+
+    for block in ordered:
+        if not _is_ready_dependency_candidate(block):
+            block["dependencies"] = []
+            continue
+
+        asset_type = (block.get("tipo_de_ativo") or "").strip()
+        dependencies = []
+
+        if asset_type == "text":
+            dependencies = []
+            latest_text = block["block_id"]
+        elif asset_type == "speech":
+            if latest_text:
+                dependencies.append(latest_text)
+            latest_speech = block["block_id"]
+        elif asset_type in {"image", "video"}:
+            if latest_speech:
+                dependencies.append(latest_speech)
+            elif latest_text:
+                dependencies.append(latest_text)
+            latest_visual = block["block_id"]
+        elif asset_type in {"audio"}:
+            if latest_speech:
+                dependencies.append(latest_speech)
+            elif latest_visual:
+                dependencies.append(latest_visual)
+        else:
+            if latest_text:
+                dependencies.append(latest_text)
+
+        block["dependencies"] = dependencies
+
+    return blocks
+
+
 def _normalize_block_for_timeline(prompt_block: dict) -> dict:
     timeline_stub = prompt_block.get("timeline_stub", {})
     return {
@@ -192,12 +245,14 @@ def ingest_prompt_blocks(storage_dir: Path, project_drawer: str, block_id: str |
 
         timeline_block = _normalize_block_for_timeline(payload)
         timeline["blocks"].append(timeline_block)
+        infer_block_dependencies(timeline["blocks"])
         existing_ids.add(current_id)
         ingested.append(
             {
                 "block_id": current_id,
                 "tipo_de_ativo": timeline_block["tipo_de_ativo"],
                 "track": timeline_block["track"],
+                "dependencies": timeline_block["dependencies"],
                 "project_block_path": str(project_block_path),
             }
         )
@@ -260,6 +315,7 @@ def update_block(
         timeline["estado_global"] = "ativo"
         project["estado_global"] = "ativo"
 
+    infer_block_dependencies(timeline["blocks"])
     project["assets_summary"] = _count_assets(timeline["blocks"])
     _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
     return target
@@ -276,6 +332,26 @@ def list_projects(storage_dir: Path) -> list[dict]:
         except Exception:
             continue
     return results
+
+
+def refresh_dependencies(storage_dir: Path, project_drawer: str) -> dict:
+    project = load_project(storage_dir, project_drawer)
+    timeline = load_timeline(storage_dir, project_drawer)
+    infer_block_dependencies(timeline["blocks"])
+    project["assets_summary"] = _count_assets(timeline["blocks"])
+    _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
+    return {
+        "project_drawer": project_drawer,
+        "blocks": [
+            {
+                "block_id": block.get("block_id"),
+                "dependencies": block.get("dependencies", []),
+                "track": block.get("track"),
+                "status": block.get("status"),
+            }
+            for block in timeline.get("blocks", [])
+        ],
+    }
 
 
 def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
@@ -320,6 +396,7 @@ def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
     if matched:
         timeline["estado_global"] = "ativo"
         project["estado_global"] = "ativo"
+        infer_block_dependencies(timeline["blocks"])
         project["assets_summary"] = _count_assets(timeline["blocks"])
         _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
 

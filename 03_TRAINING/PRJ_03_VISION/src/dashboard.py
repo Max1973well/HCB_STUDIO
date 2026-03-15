@@ -21,7 +21,13 @@ if str(HCB_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(HCB_SCRIPTS))
 
 from arms.ai_engine import generate_with_active_provider, load_engine_config
-from arms.arm_10_block_organizer import list_projects, load_timeline, scan_generated_assets
+from arms.arm_10_block_organizer import (
+    create_project,
+    list_projects,
+    load_timeline,
+    refresh_dependencies,
+    scan_generated_assets,
+)
 
 
 st.set_page_config(
@@ -72,6 +78,7 @@ def build_block_table(timeline_payload):
                 "Track": block.get("track"),
                 "Status": block.get("status"),
                 "AI": block.get("source_ai") or block.get("ferramenta_destino"),
+                "Dependencias": ", ".join(block.get("dependencies", [])),
                 "IN(ms)": block.get("in_point_ms"),
                 "OUT(ms)": block.get("out_point_ms"),
                 "Arquivo": block.get("file_reference"),
@@ -133,6 +140,42 @@ if STORAGE_PATH.exists():
 st.markdown("---")
 st.subheader("🎬 Arm 10 | Projetos e Timeline")
 
+with st.expander("Criar novo projeto do Arm 10", expanded=False):
+    with st.form("arm10_create_project_form", clear_on_submit=False):
+        form_col_1, form_col_2 = st.columns(2)
+        with form_col_1:
+            project_name = st.text_input("Nome do projeto", placeholder="Ex.: Aula Logos Semantica")
+            project_drawer = st.text_input(
+                "Gaveta do projeto",
+                placeholder="Ex.: Aula_Logos_Semantica",
+                help="Nome da pasta dedicada em 02_STORAGE/projects/",
+            )
+        with form_col_2:
+            project_id = st.text_input("Project ID", placeholder="Ex.: prj_aula_logos_semantica")
+            project_goal = st.text_area(
+                "Objetivo do projeto",
+                placeholder="Ex.: Organizar blocos de voz, imagem e apoio visual para a aula.",
+                height=100,
+            )
+        create_submitted = st.form_submit_button("Criar projeto")
+
+    if create_submitted:
+        if not all([project_name.strip(), project_drawer.strip(), project_id.strip(), project_goal.strip()]):
+            st.warning("Preencha nome, gaveta, project id e objetivo para criar o projeto.")
+        else:
+            try:
+                create_project(
+                    STORAGE_PATH,
+                    project_id=project_id.strip(),
+                    project_drawer=project_drawer.strip(),
+                    name=project_name.strip(),
+                    goal=project_goal.strip(),
+                )
+                st.success(f"Projeto criado: {project_drawer.strip()}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Falha ao criar projeto: {e}")
+
 projects = list_projects(STORAGE_PATH)
 if not projects:
     st.info("Nenhum projeto do Arm 10 encontrado ainda.")
@@ -160,7 +203,7 @@ else:
     )
     st.caption(f"Assets inbox: {selected_project.get('assets_inbox_dir', '(nao definido)')}")
 
-    action_col_1, action_col_2 = st.columns(2)
+    action_col_1, action_col_2, action_col_3 = st.columns(3)
     with action_col_1:
         if st.button("Escanear assets do projeto", key=f"scan_assets_{selected_drawer}"):
             scan_result = scan_generated_assets(STORAGE_PATH, selected_drawer)
@@ -170,6 +213,11 @@ else:
                 st.info("Nenhum asset novo encontrado para vincular.")
             st.rerun()
     with action_col_2:
+        if st.button("Recalcular dependências", key=f"refresh_dependencies_{selected_drawer}"):
+            refresh_result = refresh_dependencies(STORAGE_PATH, selected_drawer)
+            st.success(f"Dependências recalculadas em {len(refresh_result.get('blocks', []))} bloco(s).")
+            st.rerun()
+    with action_col_3:
         st.caption("Coloque os arquivos gerados na pasta inbox do projeto para o Arm 10 detectar.")
 
     block_df = build_block_table(timeline_payload)
