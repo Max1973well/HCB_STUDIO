@@ -16,6 +16,10 @@
     "objetivo": {
       "type": "string"
     },
+    "domain_profile": {
+      "type": "string",
+      "enum": ["general", "media", "education", "science", "business"]
+    },
     "estado_global": {
       "type": "string",
       "enum": ["draft", "ativo", "revisao", "concluido", "arquivado"]

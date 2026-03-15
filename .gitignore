@@ -45,6 +45,7 @@ target/
 00_Core/logs/vision_chat_history.json
 00_Core/logs/audit_envelope.jsonl
 00_Core/dist/
+04_TEMP/
 04_TEMP/plan_*.json
 02_STORAGE/blocks/
 02_STORAGE/checkpoints/ckpt_*.json

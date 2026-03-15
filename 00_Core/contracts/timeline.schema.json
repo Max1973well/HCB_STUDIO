@@ -97,6 +97,12 @@
               "type": "string"
             }
           },
+          "semantic_role": {
+            "type": "string"
+          },
+          "dependency_reason": {
+            "type": "string"
+          },
           "source_ai": {
             "type": "string",
             "description": "External AI that generated the final asset."

@@ -1,7 +1,9 @@
 import argparse
 import importlib
 import json
+import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +34,8 @@ TEMP_DIR = ROOT / "04_TEMP"
 STORAGE_DIR = ROOT / "02_STORAGE"
 ENGINES_DIR = ROOT / "00_Core" / "engines"
 LOG_DIR = ROOT / "00_Core" / "logs"
+RUST_COORDINATOR_DIR = ROOT / "00_Core" / "runtime" / "rust_coordinator"
+RUST_COORDINATOR_EXE = RUST_COORDINATOR_DIR / "target" / "debug" / "rust_coordinator.exe"
 
 SENTINEL_SRC = ROOT / "03_TRAINING" / "PRJ_02_SENTINEL" / "src"
 NAPKIN_CHECKPOINT_DIR = Path(r"F:\PrimeiroProjetoTest\checkpoints")
@@ -355,6 +359,67 @@ def command_kernel_execute(args):
         _create_system_checkpoint(note=f"Successful execution of goal: {plan['goal']}", retention_class="ephemeral")
 
 
+def _build_command_record(goal: str, source: str = "cli_planner") -> dict:
+    import uuid
+    from datetime import datetime, timezone
+
+    plan = build_plan(goal)
+    return {
+        "command_id": str(uuid.uuid4()),
+        "intent": goal,
+        "action": "execute_plan",
+        "payload": {
+            "steps": plan.get("steps", [])
+        },
+        "metadata": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": source
+        }
+    }
+
+
+def _run_rust_coordinator(command_record: dict) -> dict:
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    command_path = TEMP_DIR / f"coordinator_command_{command_record['command_id']}.json"
+    result_path = TEMP_DIR / f"coordinator_result_{command_record['command_id']}.json"
+    command_path.write_text(json.dumps(command_record, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if RUST_COORDINATOR_EXE.exists():
+        cmd = [
+            str(RUST_COORDINATOR_EXE),
+            "process",
+            "--command-file",
+            str(command_path),
+            "--result-file",
+            str(result_path),
+        ]
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    else:
+        cmd = [
+            "cargo",
+            "run",
+            "--quiet",
+            "--",
+            "process",
+            "--command-file",
+            str(command_path),
+            "--result-file",
+            str(result_path),
+        ]
+        completed = subprocess.run(cmd, cwd=RUST_COORDINATOR_DIR, capture_output=True, text=True, check=False)
+
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "Rust coordinator failed: "
+            + (completed.stderr.strip() or completed.stdout.strip() or f"rc={completed.returncode}")
+        )
+
+    if not result_path.exists():
+        raise FileNotFoundError(f"Rust coordinator did not write result file: {result_path}")
+
+    return json.loads(result_path.read_text(encoding="utf-8"))
+
+
 def _create_system_checkpoint(note: str = "", retention_class: str = "ephemeral") -> dict:
     import uuid
     from datetime import datetime, timezone
@@ -407,24 +472,7 @@ def _cleanup_ephemeral_checkpoints(limit: int = 15):
             print(f"Failed to delete old checkpoint {file}: {e}")
 
 def command_planner(args):
-    import uuid
-    from datetime import datetime, timezone
-    
-    plan = build_plan(args.goal)
-    
-    # Emit command.schema.json compliant record
-    command_record = {
-        "command_id": str(uuid.uuid4()),
-        "intent": args.goal,
-        "action": "execute_plan",
-        "payload": {
-            "steps": plan.get("steps", [])
-        },
-        "metadata": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source": "cli_planner"
-        }
-    }
+    command_record = _build_command_record(args.goal, source="cli_planner")
     
     print(json.dumps(command_record, indent=2))
     
@@ -433,6 +481,31 @@ def command_planner(args):
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     out_file.write_text(json.dumps(command_record, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Schema-compliant plan saved to {out_file}", file=sys.stderr)
+
+    if args.dispatch == "rust":
+        result = _run_rust_coordinator(command_record)
+        append_event(
+            EVENT_LOG_PATH,
+            "rust_coordinator_dispatched",
+            {
+                "command_id": command_record["command_id"],
+                "status": result.get("status"),
+            },
+        )
+        print("\n--- HCB RUST COORDINATOR RESULT ---")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def command_coordinator_demo(_args):
+    if RUST_COORDINATOR_EXE.exists():
+        cmd = [str(RUST_COORDINATOR_EXE), "demo"]
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    else:
+        cmd = ["cargo", "run", "--quiet", "--", "demo"]
+        completed = subprocess.run(cmd, cwd=RUST_COORDINATOR_DIR, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "Rust coordinator demo failed.")
+    print(completed.stdout.strip())
 
 
 def command_checkpoint(args):
@@ -797,7 +870,14 @@ def build_parser():
 
     planner_parser = subparsers.add_parser("planner", help="generate schema-compliant plan record")
     planner_parser.add_argument("--goal", required=True)
+    planner_parser.add_argument("--dispatch", choices=["none", "rust"], default="none")
     planner_parser.set_defaults(func=command_planner)
+
+    coordinator_parser = subparsers.add_parser("coordinator", help="Rust coordinator bridge operations")
+    coordinator_sub = coordinator_parser.add_subparsers(dest="coordinator_command", required=True)
+
+    coordinator_demo = coordinator_sub.add_parser("demo", help="run Rust coordinator demo loop")
+    coordinator_demo.set_defaults(func=command_coordinator_demo)
 
     checkpoint_parser = subparsers.add_parser("checkpoint", help="persist continuity capsule at each stop")
     checkpoint_parser.add_argument("action", choices=["end-of-block"], help="the checkpoint action to perform")

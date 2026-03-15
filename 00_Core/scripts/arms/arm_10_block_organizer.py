@@ -69,6 +69,47 @@ def _empty_assets_summary() -> dict:
     }
 
 
+def _infer_project_domain(name: str, goal: str) -> str:
+    haystack = f"{name} {goal}".lower()
+    if any(token in haystack for token in {"aula", "curso", "aluno", "escola", "teacher", "faculdade"}):
+        return "education"
+    if any(token in haystack for token in {"pesquisa", "cient", "artigo", "hipotese", "experimento", "cern"}):
+        return "science"
+    if any(token in haystack for token in {"empresa", "cliente", "onboarding", "relatorio", "negocio"}):
+        return "business"
+    if any(token in haystack for token in {"video", "youtube", "capcut", "roteiro", "cena", "storyboard"}):
+        return "media"
+    return "general"
+
+
+def _infer_semantic_role(block: dict, project_domain: str) -> str:
+    asset_type = (block.get("tipo_de_ativo") or "").strip()
+    notes = (block.get("notes") or "").lower()
+    target = (block.get("ferramenta_destino") or "").lower()
+
+    if asset_type == "text":
+        if project_domain in {"education", "science"}:
+            return "knowledge_base"
+        return "script_base"
+    if asset_type == "speech":
+        if "abertura" in notes or "intro" in notes:
+            return "narration_intro"
+        if project_domain in {"education", "science"}:
+            return "explanation_voice"
+        return "narration_voice"
+    if asset_type in {"image", "video"}:
+        if any(token in notes for token in {"grafico", "chart", "diagrama"}):
+            return "evidence_visual"
+        if project_domain == "business":
+            return "presentation_visual"
+        return "support_visual"
+    if asset_type == "audio":
+        if target == "suno" or any(token in notes for token in {"trilha", "music", "musica"}):
+            return "music_bed"
+        return "sound_design"
+    return "generic_asset"
+
+
 def create_project(
     storage_dir: Path,
     project_id: str,
@@ -101,6 +142,7 @@ def create_project(
         "project_drawer": project_drawer,
         "nome": name,
         "objetivo": goal,
+        "domain_profile": _infer_project_domain(name, goal),
         "estado_global": "draft",
         "created_at": now,
         "updated_at": now,
@@ -158,43 +200,69 @@ def _is_ready_dependency_candidate(block: dict) -> bool:
     return block.get("status") not in {"descartado", ""}
 
 
-def infer_block_dependencies(blocks: list[dict]) -> list[dict]:
+def infer_block_dependencies(blocks: list[dict], project_domain: str = "general") -> list[dict]:
     ordered = sorted(blocks, key=_track_priority)
-    latest_text = None
-    latest_speech = None
-    latest_visual = None
+    latest_by_role = {}
 
     for block in ordered:
         if not _is_ready_dependency_candidate(block):
             block["dependencies"] = []
+            block["dependency_reason"] = ""
             continue
 
+        semantic_role = _infer_semantic_role(block, project_domain)
         asset_type = (block.get("tipo_de_ativo") or "").strip()
         dependencies = []
+        dependency_reason = ""
 
-        if asset_type == "text":
+        if semantic_role in {"knowledge_base", "script_base"}:
             dependencies = []
-            latest_text = block["block_id"]
+            dependency_reason = "base_block"
+        elif semantic_role in {"narration_intro", "narration_voice", "explanation_voice"}:
+            base_text = latest_by_role.get("knowledge_base") or latest_by_role.get("script_base")
+            if base_text:
+                dependencies.append(base_text)
+                dependency_reason = "voice_depends_on_textual_base"
+        elif semantic_role in {"support_visual", "presentation_visual", "evidence_visual"}:
+            speech_base = (
+                latest_by_role.get("explanation_voice")
+                or latest_by_role.get("narration_voice")
+                or latest_by_role.get("narration_intro")
+            )
+            text_base = latest_by_role.get("knowledge_base") or latest_by_role.get("script_base")
+            if speech_base:
+                dependencies.append(speech_base)
+                dependency_reason = "visual_syncs_with_voice"
+            elif text_base:
+                dependencies.append(text_base)
+                dependency_reason = "visual_depends_on_textual_base"
+        elif semantic_role in {"music_bed", "sound_design"}:
+            speech_base = (
+                latest_by_role.get("explanation_voice")
+                or latest_by_role.get("narration_voice")
+                or latest_by_role.get("narration_intro")
+            )
+            visual_base = (
+                latest_by_role.get("support_visual")
+                or latest_by_role.get("presentation_visual")
+                or latest_by_role.get("evidence_visual")
+            )
+            if speech_base:
+                dependencies.append(speech_base)
+                dependency_reason = "audio_layer_follows_voice"
+            elif visual_base:
+                dependencies.append(visual_base)
+                dependency_reason = "audio_layer_follows_visual"
         elif asset_type == "speech":
-            if latest_text:
-                dependencies.append(latest_text)
-            latest_speech = block["block_id"]
-        elif asset_type in {"image", "video"}:
-            if latest_speech:
-                dependencies.append(latest_speech)
-            elif latest_text:
-                dependencies.append(latest_text)
-            latest_visual = block["block_id"]
-        elif asset_type in {"audio"}:
-            if latest_speech:
-                dependencies.append(latest_speech)
-            elif latest_visual:
-                dependencies.append(latest_visual)
-        else:
-            if latest_text:
-                dependencies.append(latest_text)
+            text_base = latest_by_role.get("knowledge_base") or latest_by_role.get("script_base")
+            if text_base:
+                dependencies.append(text_base)
+                dependency_reason = "speech_depends_on_text"
 
+        block["semantic_role"] = semantic_role
         block["dependencies"] = dependencies
+        block["dependency_reason"] = dependency_reason
+        latest_by_role[semantic_role] = block["block_id"]
 
     return blocks
 
@@ -245,7 +313,7 @@ def ingest_prompt_blocks(storage_dir: Path, project_drawer: str, block_id: str |
 
         timeline_block = _normalize_block_for_timeline(payload)
         timeline["blocks"].append(timeline_block)
-        infer_block_dependencies(timeline["blocks"])
+        infer_block_dependencies(timeline["blocks"], project.get("domain_profile", "general"))
         existing_ids.add(current_id)
         ingested.append(
             {
@@ -315,7 +383,7 @@ def update_block(
         timeline["estado_global"] = "ativo"
         project["estado_global"] = "ativo"
 
-    infer_block_dependencies(timeline["blocks"])
+    infer_block_dependencies(timeline["blocks"], project.get("domain_profile", "general"))
     project["assets_summary"] = _count_assets(timeline["blocks"])
     _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
     return target
@@ -337,15 +405,20 @@ def list_projects(storage_dir: Path) -> list[dict]:
 def refresh_dependencies(storage_dir: Path, project_drawer: str) -> dict:
     project = load_project(storage_dir, project_drawer)
     timeline = load_timeline(storage_dir, project_drawer)
-    infer_block_dependencies(timeline["blocks"])
+    if not project.get("domain_profile"):
+        project["domain_profile"] = _infer_project_domain(project.get("nome", ""), project.get("objetivo", ""))
+    infer_block_dependencies(timeline["blocks"], project.get("domain_profile", "general"))
     project["assets_summary"] = _count_assets(timeline["blocks"])
     _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
     return {
         "project_drawer": project_drawer,
+        "domain_profile": project.get("domain_profile", "general"),
         "blocks": [
             {
                 "block_id": block.get("block_id"),
+                "semantic_role": block.get("semantic_role", ""),
                 "dependencies": block.get("dependencies", []),
+                "dependency_reason": block.get("dependency_reason", ""),
                 "track": block.get("track"),
                 "status": block.get("status"),
             }
@@ -396,7 +469,7 @@ def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
     if matched:
         timeline["estado_global"] = "ativo"
         project["estado_global"] = "ativo"
-        infer_block_dependencies(timeline["blocks"])
+        infer_block_dependencies(timeline["blocks"], project.get("domain_profile", "general"))
         project["assets_summary"] = _count_assets(timeline["blocks"])
         _save_project_and_timeline(storage_dir, project_drawer, project, timeline)
 
