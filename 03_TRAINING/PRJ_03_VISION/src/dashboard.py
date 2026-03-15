@@ -21,7 +21,7 @@ if str(HCB_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(HCB_SCRIPTS))
 
 from arms.ai_engine import generate_with_active_provider, load_engine_config
-from arms.arm_10_block_organizer import list_projects, load_timeline
+from arms.arm_10_block_organizer import list_projects, load_timeline, scan_generated_assets
 
 
 st.set_page_config(
@@ -158,6 +158,19 @@ else:
         f"Timeline: {timeline_payload.get('timeline_policy', {}).get('placement_mode', 'automatico')} | "
         f"Projeto: {timeline_payload.get('nome', '')}"
     )
+    st.caption(f"Assets inbox: {selected_project.get('assets_inbox_dir', '(nao definido)')}")
+
+    action_col_1, action_col_2 = st.columns(2)
+    with action_col_1:
+        if st.button("Escanear assets do projeto", key=f"scan_assets_{selected_drawer}"):
+            scan_result = scan_generated_assets(STORAGE_PATH, selected_drawer)
+            if scan_result.get("matched_count", 0) > 0:
+                st.success(f"Assets vinculados automaticamente: {scan_result['matched_count']}")
+            else:
+                st.info("Nenhum asset novo encontrado para vincular.")
+            st.rerun()
+    with action_col_2:
+        st.caption("Coloque os arquivos gerados na pasta inbox do projeto para o Arm 10 detectar.")
 
     block_df = build_block_table(timeline_payload)
     if block_df.empty:
