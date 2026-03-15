@@ -12,7 +12,7 @@ DEFAULT_CONFIG = {
     "providers": {
         "gemini": {
             "enabled": True,
-            "model": "gemini-1.5-flash",
+            "model": "gemini-2.5-flash-lite",
             "api_key_env": "GEMINI_API_KEY",
             "temperature": 0.2,
         },
@@ -57,7 +57,7 @@ def _gemini_generate(prompt: str, provider_cfg: dict, system_prompt: str = "") -
     if not api_key:
         raise RuntimeError(f"Missing API key in environment variable: {env_var}")
 
-    model = provider_cfg.get("model", "gemini-1.5-flash")
+    model = provider_cfg.get("model", "gemini-2.5-flash-lite")
     temperature = provider_cfg.get("temperature", 0.2)
 
     endpoint = (
@@ -88,6 +88,11 @@ def _gemini_generate(prompt: str, provider_cfg: dict, system_prompt: str = "") -
             raw = resp.read().decode("utf-8", errors="ignore")
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="ignore")
+        if e.code == 400 and "API_KEY_INVALID" in detail:
+            raise RuntimeError(
+                "Gemini API key invalid. Update GEMINI_API_KEY in the dashboard sidebar "
+                "or in the terminal environment before retrying."
+            ) from e
         raise RuntimeError(f"Gemini HTTP {e.code}: {detail}") from e
     except urllib.error.URLError as e:
         raise RuntimeError(f"Gemini connection error: {e}") from e
