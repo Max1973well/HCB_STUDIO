@@ -6,6 +6,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+from arms.hcb_identity import build_ai_context_system_prompt
+
 
 DEFAULT_CONFIG = {
     "active_provider": "gemini",
@@ -160,9 +162,16 @@ def generate_with_active_provider(config_path: Path, prompt: str, system_prompt:
     if not provider_cfg or not provider_cfg.get("enabled", False):
         raise RuntimeError(f"Active provider '{active}' is not enabled/configured.")
 
+    root = config_path.resolve().parents[2]
+    context_prompt = build_ai_context_system_prompt(root)
+    final_system_prompt = "\n\n".join(part for part in [context_prompt, system_prompt] if part.strip())
+
     if active == "gemini":
-        return _gemini_generate(prompt, provider_cfg, system_prompt=system_prompt)
+        result = _gemini_generate(prompt, provider_cfg, system_prompt=final_system_prompt)
     elif active == "ollama":
-        return _ollama_generate(prompt, provider_cfg, system_prompt=system_prompt)
-        
-    raise RuntimeError(f"Provider '{active}' not implemented yet.")
+        result = _ollama_generate(prompt, provider_cfg, system_prompt=final_system_prompt)
+    else:
+        raise RuntimeError(f"Provider '{active}' not implemented yet.")
+
+    result["hcb_context_loaded"] = bool(context_prompt)
+    return result

@@ -265,6 +265,20 @@ def activate_identity(root: Path, user_id: str) -> Path:
     return out
 
 
+def load_sci_profile(root: Path, user_id: str) -> dict | None:
+    path = sci_profiles_dir(root) / f"{user_id}.json"
+    if not path.exists():
+        return None
+    return _read_json(path)
+
+
+def load_hcb_state(root: Path, user_id: str) -> dict | None:
+    path = hcb_states_dir(root) / f"{user_id}.json"
+    if not path.exists():
+        return None
+    return _read_json(path)
+
+
 def get_active_identity(root: Path) -> dict | None:
     path = runtime_identity_file(root)
     if not path.exists():
@@ -278,3 +292,70 @@ def has_active_identity(root: Path) -> bool:
         return False
     profile_path = payload.get("sci_profile_path", "")
     return bool(profile_path) and Path(profile_path).exists()
+
+
+def load_active_user_context(root: Path) -> dict | None:
+    runtime_payload = get_active_identity(root)
+    if not runtime_payload:
+        return None
+
+    user_id = runtime_payload.get("active_user_id", "")
+    if not user_id:
+        return None
+
+    sci = load_sci_profile(root, user_id)
+    if not sci:
+        return None
+
+    return {
+        "user_id": user_id,
+        "runtime": runtime_payload,
+        "sci": sci,
+        "state": load_hcb_state(root, user_id),
+    }
+
+
+def build_ai_context_system_prompt(root: Path) -> str:
+    context = load_active_user_context(root)
+    if not context:
+        return ""
+
+    sci = context.get("sci") or {}
+    state = context.get("state") or {}
+    identity_base = sci.get("identity_base") or {}
+    interaction_profile = sci.get("interaction_profile") or {}
+    accessibility_profile = sci.get("accessibility_profile") or {}
+    accessibility_flags = state.get("accessibility_flags") or {}
+
+    lines = [
+        "HCB Active User Context",
+        f"user_id: {context.get('user_id', '')}",
+        f"role_profile: {identity_base.get('role_profile', '')}",
+        f"technical_level: {identity_base.get('technical_level', '')}",
+        f"primary_language: {identity_base.get('primary_language', '')}",
+        f"preferred_tone: {interaction_profile.get('preferred_tone', '')}",
+        f"response_depth: {interaction_profile.get('response_depth', '')}",
+        f"step_by_step: {interaction_profile.get('step_by_step', False)}",
+        f"correction_style: {interaction_profile.get('correction_style', '')}",
+        f"needs_adaptation: {accessibility_profile.get('needs_adaptation', False)}",
+    ]
+
+    if state:
+        lines.extend(
+            [
+                f"current_mode: {state.get('mode', '')}",
+                f"energy: {state.get('energy', '')}",
+                f"focus: {state.get('focus', '')}",
+                f"urgency: {state.get('urgency', '')}",
+                f"cognitive_load: {state.get('cognitive_load', '')}",
+                f"response_preference_now: {state.get('response_preference', '')}",
+                f"active_project: {state.get('active_project', '')}",
+                f"fatigue_now: {accessibility_flags.get('fatigue_now', False)}",
+                f"pain_now: {accessibility_flags.get('pain_now', False)}",
+                f"visual_overload: {accessibility_flags.get('visual_overload', False)}",
+                f"needs_pause: {accessibility_flags.get('needs_pause', False)}",
+            ]
+        )
+
+    lines.append("Use this context to adapt tone, depth, pace, and task framing without inventing facts.")
+    return "\n".join(lines)

@@ -328,6 +328,7 @@ def command_ai_status(_args):
         "model": p.get("model"),
         "enabled": p.get("enabled"),
         "api_key_env": p.get("api_key_env"),
+        "active_identity_loaded": has_active_identity(ROOT),
     }
     if getattr(_args, "json", False):
         print(json.dumps(payload, indent=2, ensure_ascii=False))
