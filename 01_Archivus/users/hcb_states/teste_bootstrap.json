@@ -1,0 +1,19 @@
+{
+  "user_id": "teste_bootstrap",
+  "session_id": "sess_d0d9ec0d02",
+  "updated_at": "2026-03-22T08:55:31.988562+00:00",
+  "mode": "creation",
+  "energy": "medium",
+  "focus": "normal",
+  "urgency": "medium",
+  "cognitive_load": "moderate",
+  "response_preference": "balanced",
+  "accessibility_flags": {
+    "fatigue_now": false,
+    "pain_now": false,
+    "visual_overload": false,
+    "needs_pause": false
+  },
+  "active_project": "",
+  "notes": ""
+}

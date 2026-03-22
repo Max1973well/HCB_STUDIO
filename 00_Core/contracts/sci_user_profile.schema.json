@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SCIUserProfile",
+  "description": "Stable user coupling profile for HCB.exe onboarding.",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "identity_base": {
+      "type": "object",
+      "properties": {
+        "primary_language": { "type": "string" },
+        "timezone": { "type": "string" },
+        "role_profile": {
+          "type": "string",
+          "enum": ["general", "creator", "student", "teacher", "researcher", "business", "developer"]
+        },
+        "technical_level": {
+          "type": "string",
+          "enum": ["beginner", "intermediate", "advanced"]
+        }
+      },
+      "required": ["primary_language", "timezone", "role_profile", "technical_level"]
+    },
+    "interaction_profile": {
+      "type": "object",
+      "properties": {
+        "preferred_tone": {
+          "type": "string",
+          "enum": ["direct", "balanced", "gentle"]
+        },
+        "response_depth": {
+          "type": "string",
+          "enum": ["short", "balanced", "deep"]
+        },
+        "step_by_step": { "type": "boolean" },
+        "correction_style": {
+          "type": "string",
+          "enum": ["explicit", "gentle", "mixed"]
+        }
+      },
+      "required": ["preferred_tone", "response_depth", "step_by_step", "correction_style"]
+    },
+    "accessibility_profile": {
+      "type": "object",
+      "properties": {
+        "needs_adaptation": { "type": "boolean" },
+        "visual_support": { "type": "boolean" },
+        "motor_support": { "type": "boolean" },
+        "fatigue_support": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "required": ["needs_adaptation", "visual_support", "motor_support", "fatigue_support"]
+    },
+    "governance": {
+      "type": "object",
+      "properties": {
+        "recognition_required": { "type": "boolean" },
+        "allow_capsules_on_transition_only": { "type": "boolean" },
+        "sci_is_stable": { "type": "boolean" }
+      },
+      "required": ["recognition_required", "allow_capsules_on_transition_only", "sci_is_stable"]
+    }
+  },
+  "required": [
+    "user_id",
+    "display_name",
+    "version",
+    "created_at",
+    "updated_at",
+    "identity_base",
+    "interaction_profile",
+    "accessibility_profile",
+    "governance"
+  ]
+}

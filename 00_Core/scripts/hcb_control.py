@@ -15,6 +15,7 @@ from arms.ai_engine import (
     set_active_provider,
 )
 from arms.concept_registry import list_concepts, upsert_concept
+from arms.hcb_identity import create_hcb_state, create_sci_profile
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
 from arms.event_bus import append_event, read_recent_events
@@ -213,6 +214,48 @@ def command_arm_memory_find(args):
     rows = find_capsules(ROOT, query=args.query, limit=args.limit)
     print(f"--- HCB ARM MEMORY FIND: '{args.query}' ---")
     _print_capsule_rows(rows)
+
+
+def command_identity_init(args):
+    path = create_sci_profile(
+        root=ROOT,
+        user_id=args.user_id,
+        display_name=args.display_name,
+        primary_language=args.primary_language,
+        timezone_name=args.timezone_name,
+        role_profile=args.role_profile,
+        technical_level=args.technical_level,
+        preferred_tone=args.preferred_tone,
+        response_depth=args.response_depth,
+        step_by_step=args.step_by_step,
+        correction_style=args.correction_style,
+        needs_adaptation=args.needs_adaptation,
+        visual_support=args.visual_support,
+        motor_support=args.motor_support,
+        fatigue_support=args.fatigue_support,
+        accessibility_notes=args.accessibility_notes,
+    )
+    print(f"SCI profile created: {path}")
+
+
+def command_state_init(args):
+    path = create_hcb_state(
+        root=ROOT,
+        user_id=args.user_id,
+        mode=args.mode,
+        energy=args.energy,
+        focus=args.focus,
+        urgency=args.urgency,
+        cognitive_load=args.cognitive_load,
+        response_preference=args.response_preference,
+        active_project=args.active_project,
+        notes=args.notes,
+        fatigue_now=args.fatigue_now,
+        pain_now=args.pain_now,
+        visual_overload=args.visual_overload,
+        needs_pause=args.needs_pause,
+    )
+    print(f"HCB state created: {path}")
 
 
 def _log_ai_response(result: dict) -> Path:
@@ -900,6 +943,62 @@ def build_parser():
     arm_memory_find.add_argument("--query", required=True)
     arm_memory_find.add_argument("--limit", type=int, default=20)
     arm_memory_find.set_defaults(func=command_arm_memory_find)
+
+    identity_parser = subparsers.add_parser("identity", help="SCI user identity bootstrap")
+    identity_sub = identity_parser.add_subparsers(dest="identity_command", required=True)
+
+    identity_init = identity_sub.add_parser("init", help="create a stable SCI user profile")
+    identity_init.add_argument("--user-id", required=True)
+    identity_init.add_argument("--display-name", required=True)
+    identity_init.add_argument("--primary-language", default="pt-BR")
+    identity_init.add_argument("--timezone-name", default="Europe/London")
+    identity_init.add_argument(
+        "--role-profile",
+        choices=["general", "creator", "student", "teacher", "researcher", "business", "developer"],
+        default="general",
+    )
+    identity_init.add_argument(
+        "--technical-level",
+        choices=["beginner", "intermediate", "advanced"],
+        default="intermediate",
+    )
+    identity_init.add_argument("--preferred-tone", choices=["direct", "balanced", "gentle"], default="balanced")
+    identity_init.add_argument("--response-depth", choices=["short", "balanced", "deep"], default="balanced")
+    identity_init.add_argument("--step-by-step", action="store_true")
+    identity_init.add_argument("--correction-style", choices=["explicit", "gentle", "mixed"], default="mixed")
+    identity_init.add_argument("--needs-adaptation", action="store_true")
+    identity_init.add_argument("--visual-support", action="store_true")
+    identity_init.add_argument("--motor-support", action="store_true")
+    identity_init.add_argument("--fatigue-support", action="store_true")
+    identity_init.add_argument("--accessibility-notes", default="")
+    identity_init.set_defaults(func=command_identity_init)
+
+    state_parser = subparsers.add_parser("state", help="HCB dynamic state bootstrap")
+    state_sub = state_parser.add_subparsers(dest="state_command", required=True)
+
+    state_init = state_sub.add_parser("init", help="create the dynamic HCB state for a user")
+    state_init.add_argument("--user-id", required=True)
+    state_init.add_argument(
+        "--mode",
+        choices=["study", "work", "creation", "research", "review", "support"],
+        default="work",
+    )
+    state_init.add_argument("--energy", choices=["low", "medium", "high"], default="medium")
+    state_init.add_argument("--focus", choices=["scattered", "normal", "deep"], default="normal")
+    state_init.add_argument("--urgency", choices=["low", "medium", "high"], default="medium")
+    state_init.add_argument("--cognitive-load", choices=["light", "moderate", "heavy"], default="moderate")
+    state_init.add_argument(
+        "--response-preference",
+        choices=["summary", "balanced", "detailed"],
+        default="balanced",
+    )
+    state_init.add_argument("--active-project", default="")
+    state_init.add_argument("--notes", default="")
+    state_init.add_argument("--fatigue-now", action="store_true")
+    state_init.add_argument("--pain-now", action="store_true")
+    state_init.add_argument("--visual-overload", action="store_true")
+    state_init.add_argument("--needs-pause", action="store_true")
+    state_init.set_defaults(func=command_state_init)
 
     ai_parser = subparsers.add_parser(
         "ai",
