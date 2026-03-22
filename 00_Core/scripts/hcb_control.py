@@ -699,7 +699,17 @@ def command_prompt_generate(args):
         AI_ENGINE_CONFIG,
         idea=args.idea,
         target_tool=args.target,
-        language=args.language
+        language=args.language,
+        project_drawer=args.project_drawer,
+        project_domain=args.project_domain,
+        workflow_type=args.workflow_type,
+        workflow_lane=args.workflow_lane,
+        sequence_label=args.sequence_label,
+        sequence_index=args.sequence_index,
+        unit_type=args.unit_type,
+        phase=args.phase,
+        insertion_mode=args.insertion_mode,
+        revision_of=args.revision_of,
     )
 
     blocks_dir = STORAGE_DIR / "blocks" / "prompt_queue"
@@ -712,8 +722,11 @@ def command_prompt_generate(args):
         "prompt_block_generated",
         {
             "block_id": payload["block_id"],
-            "target_tool": payload["ferramenta_destino"],
-            "asset_type": payload["tipo_de_ativo"],
+            "target_tool": payload["target_tool"],
+            "artifact_type": payload["artifact_type"],
+            "workflow_type": payload["workflow_type"],
+            "sequence_id": payload["sequence_id"],
+            "unit_id": payload["unit_id"],
             "validation_issues": payload.get("validation_issues", []),
         },
     )
@@ -1166,6 +1179,63 @@ def build_parser():
     prompt_gen.add_argument("idea", help="the raw creative concept")
     prompt_gen.add_argument("--target", required=True, help="the target AI tool (midjourney, elevenlabs, etc)")
     prompt_gen.add_argument("--language", default="en", help="the language of the final generated prompt")
+    prompt_gen.add_argument("--project-drawer", default=None, help="target project drawer/gaveta")
+    prompt_gen.add_argument(
+        "--project-domain",
+        default=None,
+        choices=["media", "education", "science", "business", "home", "assistive", "general"],
+        help="project domain for the generated unit",
+    )
+    prompt_gen.add_argument(
+        "--workflow-type",
+        default=None,
+        choices=[
+            "media_production",
+            "teaching_flow",
+            "research_flow",
+            "business_flow",
+            "home_flow",
+            "assistive_flow",
+            "general_flow",
+        ],
+        help="workflow type used by Arm 10 to organize the unit",
+    )
+    prompt_gen.add_argument(
+        "--workflow-lane",
+        default=None,
+        choices=["instruction", "evidence", "visual", "audio", "review", "support", "planning", "execution"],
+        help="universal workflow lane for the generated unit",
+    )
+    prompt_gen.add_argument("--sequence-label", default=None, help="human label for the sequence")
+    prompt_gen.add_argument("--sequence-index", type=int, default=0, help="sequence position inside the project")
+    prompt_gen.add_argument(
+        "--unit-type",
+        default=None,
+        choices=[
+            "instruction_block",
+            "planning_block",
+            "teaching_block",
+            "evidence_block",
+            "media_block",
+            "support_block",
+            "review_block",
+            "assistive_block",
+        ],
+        help="explicit universal unit type",
+    )
+    prompt_gen.add_argument(
+        "--phase",
+        default="generate",
+        choices=["capture", "plan", "generate", "validate", "organize", "review", "finalize"],
+        help="phase associated with this unit",
+    )
+    prompt_gen.add_argument(
+        "--insertion-mode",
+        default="append",
+        choices=["append", "insert_before", "insert_after", "replace", "fork_revision"],
+        help="how this unit should be inserted into the process timeline",
+    )
+    prompt_gen.add_argument("--revision-of", default=None, help="existing unit_id being revised")
     prompt_gen.set_defaults(func=command_prompt_generate)
 
     organizer_parser = subparsers.add_parser("organizer", help="Arm 10 Production Block Organizer operations")
