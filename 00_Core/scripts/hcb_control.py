@@ -16,12 +16,14 @@ from arms.ai_engine import (
 )
 from arms.concept_registry import list_concepts, upsert_concept
 from arms.hcb_identity import (
+    HCB_STATE_QUESTIONS,
     SCI_ONBOARDING_QUESTIONS,
     activate_identity,
     create_hcb_state,
     create_sci_profile,
     get_active_identity,
     has_active_identity,
+    run_hcb_state_wizard,
     run_sci_onboarding_wizard,
 )
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
@@ -293,6 +295,17 @@ def command_state_init(args):
         needs_pause=args.needs_pause,
     )
     print(f"HCB state created: {path}")
+
+
+def command_state_questions(_args):
+    print("--- HCB STATE QUESTIONS ---")
+    for row in HCB_STATE_QUESTIONS:
+        print(f"- {row}")
+
+
+def command_state_wizard(args):
+    path = run_hcb_state_wizard(ROOT, user_id=args.user_id)
+    print(f"HCB state created via wizard: {path}")
 
 
 def _log_ai_response(result: dict) -> Path:
@@ -1050,6 +1063,13 @@ def build_parser():
     state_init.add_argument("--visual-overload", action="store_true")
     state_init.add_argument("--needs-pause", action="store_true")
     state_init.set_defaults(func=command_state_init)
+
+    state_questions = state_sub.add_parser("questions", help="list the objective HCB state questions")
+    state_questions.set_defaults(func=command_state_questions)
+
+    state_wizard = state_sub.add_parser("wizard", help="run the HCB state wizard in the terminal")
+    state_wizard.add_argument("--user-id", required=True)
+    state_wizard.set_defaults(func=command_state_wizard)
 
     ai_parser = subparsers.add_parser(
         "ai",

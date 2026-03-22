@@ -20,6 +20,21 @@ SCI_ONBOARDING_QUESTIONS = [
     "14. Observações de acessibilidade (opcional)",
 ]
 
+HCB_STATE_QUESTIONS = [
+    "1. Modo atual: study|work|creation|research|review|support",
+    "2. Energia agora: low|medium|high",
+    "3. Foco agora: scattered|normal|deep",
+    "4. Urgência agora: low|medium|high",
+    "5. Carga cognitiva agora: light|moderate|heavy",
+    "6. Preferência de resposta agora: summary|balanced|detailed",
+    "7. Projeto ativo (opcional)",
+    "8. Fadiga agora? yes|no",
+    "9. Dor agora? yes|no",
+    "10. Sobrecarga visual agora? yes|no",
+    "11. Precisa de pausa agora? yes|no",
+    "12. Observações do momento (opcional)",
+]
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -191,6 +206,47 @@ def run_sci_onboarding_wizard(root: Path, user_id: str, answers: dict | None = N
         motor_support=motor_support,
         fatigue_support=fatigue_support,
         accessibility_notes=accessibility_notes,
+    )
+
+
+def run_hcb_state_wizard(root: Path, user_id: str, answers: dict | None = None) -> Path:
+    answers = answers or {}
+
+    def ask(key: str, prompt: str, default: str = "") -> str:
+        if key in answers:
+            return str(answers[key])
+        suffix = f" [{default}]" if default else ""
+        raw = input(f"{prompt}{suffix}: ").strip()
+        return raw or default
+
+    mode = ask("mode", "Modo atual", "work")
+    energy = ask("energy", "Energia agora", "medium")
+    focus = ask("focus", "Foco agora", "normal")
+    urgency = ask("urgency", "Urgência agora", "medium")
+    cognitive_load = ask("cognitive_load", "Carga cognitiva agora", "moderate")
+    response_preference = ask("response_preference", "Preferência de resposta agora", "balanced")
+    active_project = ask("active_project", "Projeto ativo", "")
+    fatigue_now = _to_bool(ask("fatigue_now", "Fadiga agora? yes/no", "no"))
+    pain_now = _to_bool(ask("pain_now", "Dor agora? yes/no", "no"))
+    visual_overload = _to_bool(ask("visual_overload", "Sobrecarga visual agora? yes/no", "no"))
+    needs_pause = _to_bool(ask("needs_pause", "Precisa de pausa agora? yes/no", "no"))
+    notes = ask("notes", "Observações do momento", "")
+
+    return create_hcb_state(
+        root=root,
+        user_id=user_id,
+        mode=mode,
+        energy=energy,
+        focus=focus,
+        urgency=urgency,
+        cognitive_load=cognitive_load,
+        response_preference=response_preference,
+        active_project=active_project,
+        notes=notes,
+        fatigue_now=fatigue_now,
+        pain_now=pain_now,
+        visual_overload=visual_overload,
+        needs_pause=needs_pause,
     )
 
 

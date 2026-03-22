@@ -1,8 +1,8 @@
 {
   "user_id": "teste_bootstrap",
-  "session_id": "sess_d0d9ec0d02",
-  "updated_at": "2026-03-22T08:55:31.988562+00:00",
-  "mode": "creation",
+  "session_id": "sess_de65eb02b1",
+  "updated_at": "2026-03-22T09:54:10.070642+00:00",
+  "mode": "work",
   "energy": "medium",
   "focus": "normal",
   "urgency": "medium",
@@ -14,6 +14,6 @@
     "visual_overload": false,
     "needs_pause": false
   },
-  "active_project": "",
+  "active_project": "hcb_exe",
   "notes": ""
 }
