@@ -37,9 +37,17 @@ def hcb_states_dir(root: Path) -> Path:
     return _users_root(root) / "hcb_states"
 
 
+def runtime_identity_file(root: Path) -> Path:
+    return root / "00_Core" / "config" / "hcb_identity_runtime.json"
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _to_bool(value: str) -> bool:
@@ -184,3 +192,33 @@ def run_sci_onboarding_wizard(root: Path, user_id: str, answers: dict | None = N
         fatigue_support=fatigue_support,
         accessibility_notes=accessibility_notes,
     )
+
+
+def activate_identity(root: Path, user_id: str) -> Path:
+    profile_path = sci_profiles_dir(root) / f"{user_id}.json"
+    if not profile_path.exists():
+        raise FileNotFoundError(f"SCI profile not found for user_id: {user_id}")
+    payload = {
+        "active_user_id": user_id,
+        "sci_profile_path": str(profile_path),
+        "activated_at": _utc_now(),
+        "installation_ready": True,
+    }
+    out = runtime_identity_file(root)
+    _write_json(out, payload)
+    return out
+
+
+def get_active_identity(root: Path) -> dict | None:
+    path = runtime_identity_file(root)
+    if not path.exists():
+        return None
+    return _read_json(path)
+
+
+def has_active_identity(root: Path) -> bool:
+    payload = get_active_identity(root)
+    if not payload:
+        return False
+    profile_path = payload.get("sci_profile_path", "")
+    return bool(profile_path) and Path(profile_path).exists()

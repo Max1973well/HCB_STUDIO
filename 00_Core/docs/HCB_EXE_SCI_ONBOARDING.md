@@ -43,6 +43,16 @@ Wizard no terminal:
 python F:\HCB_STUDIO\00_Core\scripts\hcb_control.py identity wizard --user-id maxwell
 ```
 
+Ativar um perfil existente:
+```powershell
+python F:\HCB_STUDIO\00_Core\scripts\hcb_control.py identity activate --user-id maxwell
+```
+
+Ver identidade ativa:
+```powershell
+python F:\HCB_STUDIO\00_Core\scripts\hcb_control.py identity status
+```
+
 Bootstrap direto por flags:
 ```powershell
 python F:\HCB_STUDIO\00_Core\scripts\hcb_control.py identity init --user-id maxwell --display-name "Maxwell" --role-profile creator --technical-level intermediate --preferred-tone direct --response-depth balanced --step-by-step
@@ -54,6 +64,13 @@ O onboarding gera:
 
 Depois disso, o próximo passo é gerar o estado dinâmico:
 - `01_Archivus/users/hcb_states/<user_id>.json`
+
+## Regra de bloqueio
+Sem `SCI` ativo em `00_Core/config/hcb_identity_runtime.json`, o sistema bloqueia comandos operacionais.
+
+Exceções:
+- `identity ...`
+- `status`
 
 ## Regra de implementação
 O onboarding deve ser curto, claro e sem linguagem clínica.

@@ -15,7 +15,15 @@ from arms.ai_engine import (
     set_active_provider,
 )
 from arms.concept_registry import list_concepts, upsert_concept
-from arms.hcb_identity import SCI_ONBOARDING_QUESTIONS, create_hcb_state, create_sci_profile, run_sci_onboarding_wizard
+from arms.hcb_identity import (
+    SCI_ONBOARDING_QUESTIONS,
+    activate_identity,
+    create_hcb_state,
+    create_sci_profile,
+    get_active_identity,
+    has_active_identity,
+    run_sci_onboarding_wizard,
+)
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
 from arms.event_bus import append_event, read_recent_events
@@ -235,7 +243,9 @@ def command_identity_init(args):
         fatigue_support=args.fatigue_support,
         accessibility_notes=args.accessibility_notes,
     )
+    runtime_path = activate_identity(ROOT, args.user_id)
     print(f"SCI profile created: {path}")
+    print(f"SCI profile activated: {runtime_path}")
 
 
 def command_identity_questions(_args):
@@ -246,7 +256,23 @@ def command_identity_questions(_args):
 
 def command_identity_wizard(args):
     path = run_sci_onboarding_wizard(ROOT, user_id=args.user_id)
+    runtime_path = activate_identity(ROOT, args.user_id)
     print(f"SCI profile created via wizard: {path}")
+    print(f"SCI profile activated: {runtime_path}")
+
+
+def command_identity_activate(args):
+    runtime_path = activate_identity(ROOT, args.user_id)
+    print(f"SCI profile activated: {runtime_path}")
+
+
+def command_identity_status(_args):
+    payload = get_active_identity(ROOT)
+    print("--- HCB ACTIVE IDENTITY ---")
+    if not payload:
+        print("(none)")
+        return
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 def command_state_init(args):
@@ -991,6 +1017,13 @@ def build_parser():
     identity_wizard.add_argument("--user-id", required=True)
     identity_wizard.set_defaults(func=command_identity_wizard)
 
+    identity_activate = identity_sub.add_parser("activate", help="activate an existing SCI profile for runtime")
+    identity_activate.add_argument("--user-id", required=True)
+    identity_activate.set_defaults(func=command_identity_activate)
+
+    identity_status = identity_sub.add_parser("status", help="show the active SCI runtime identity")
+    identity_status.set_defaults(func=command_identity_status)
+
     state_parser = subparsers.add_parser("state", help="HCB dynamic state bootstrap")
     state_sub = state_parser.add_subparsers(dest="state_command", required=True)
 
@@ -1159,6 +1192,10 @@ def build_parser():
     return parser
 
 
+def _requires_active_identity(command_name: str) -> bool:
+    return command_name not in {"identity", "status"}
+
+
 def main():
     import uuid
     from datetime import datetime, timezone
@@ -1173,6 +1210,12 @@ def main():
     error_details = None
     
     try:
+        if _requires_active_identity(args.command) and not has_active_identity(ROOT):
+            raise RuntimeError(
+                "SCI identity not loaded. Complete onboarding first with "
+                "`python F:\\HCB_STUDIO\\00_Core\\scripts\\hcb_control.py identity wizard --user-id <user_id>` "
+                "or activate an existing profile with `identity activate --user-id <user_id>`."
+            )
         args.func(args)
     except Exception as e:
         status = "failure"

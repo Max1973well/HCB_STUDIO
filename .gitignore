@@ -47,6 +47,7 @@ target/
 00_Core/dist/
 04_TEMP/
 04_TEMP/plan_*.json
+00_Core/config/hcb_identity_runtime.json
 02_STORAGE/blocks/
 02_STORAGE/checkpoints/ckpt_*.json
 02_STORAGE/projects/
