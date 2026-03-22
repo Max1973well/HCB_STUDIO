@@ -15,7 +15,9 @@ VALID_BLOCK_STATUS = {
     "descartado",
 }
 
-ASSET_TYPES = {"image", "video", "audio", "speech", "text"}
+ARTIFACT_TYPES = {"text", "speech", "image", "video", "audio", "graphic", "checklist", "table", "note", "task"}
+WORKFLOW_LANES = {"instruction", "evidence", "visual", "audio", "review", "support", "planning", "execution"}
+MEDIA_TRACKS = {"V1", "V2", "A1", "A2", "A3"}
 
 
 def _utc_now() -> str:
@@ -61,11 +63,16 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def _empty_assets_summary() -> dict:
     return {
+        "text": 0,
+        "speech": 0,
         "image": 0,
         "video": 0,
         "audio": 0,
-        "speech": 0,
-        "text": 0,
+        "graphic": 0,
+        "checklist": 0,
+        "table": 0,
+        "note": 0,
+        "task": 0,
     }
 
 
@@ -77,37 +84,96 @@ def _infer_project_domain(name: str, goal: str) -> str:
         return "science"
     if any(token in haystack for token in {"empresa", "cliente", "onboarding", "relatorio", "negocio"}):
         return "business"
+    if any(token in haystack for token in {"casa", "compras", "receita", "mercado", "rotina"}):
+        return "home"
+    if any(token in haystack for token in {"assistivo", "assistencia", "tetra", "alzheimer", "limitacao", "acompanhamento"}):
+        return "assistive"
     if any(token in haystack for token in {"video", "youtube", "capcut", "roteiro", "cena", "storyboard"}):
         return "media"
     return "general"
 
 
-def _infer_semantic_role(block: dict, project_domain: str) -> str:
-    asset_type = (block.get("tipo_de_ativo") or "").strip()
-    notes = (block.get("notes") or "").lower()
-    target = (block.get("ferramenta_destino") or "").lower()
+def _workflow_from_domain(project_domain: str) -> str:
+    mapping = {
+        "media": "media_production",
+        "education": "teaching_flow",
+        "science": "research_flow",
+        "business": "business_flow",
+        "home": "home_flow",
+        "assistive": "assistive_flow",
+        "general": "general_flow",
+    }
+    return mapping.get((project_domain or "").strip().lower(), "general_flow")
 
-    if asset_type == "text":
+
+def _infer_workflow_lane_from_artifact(artifact_type: str) -> str:
+    mapping = {
+        "text": "instruction",
+        "note": "instruction",
+        "table": "evidence",
+        "graphic": "evidence",
+        "speech": "audio",
+        "audio": "audio",
+        "image": "visual",
+        "video": "visual",
+        "checklist": "support",
+        "task": "execution",
+    }
+    return mapping.get((artifact_type or "").strip().lower(), "instruction")
+
+
+def _infer_semantic_role(block: dict, project_domain: str) -> str:
+    artifact_type = (block.get("artifact_type") or block.get("tipo_de_ativo") or "").strip()
+    notes = (block.get("notes") or "").lower()
+    target = (block.get("target_tool") or block.get("ferramenta_destino") or "").lower()
+    unit_type = (block.get("unit_type") or "").strip()
+    workflow_lane = (block.get("workflow_lane") or "").strip()
+
+    if unit_type:
+        return unit_type
+    if workflow_lane:
+        return workflow_lane
+
+    if artifact_type == "text":
         if project_domain in {"education", "science"}:
             return "knowledge_base"
         return "script_base"
-    if asset_type == "speech":
+    if artifact_type == "speech":
         if "abertura" in notes or "intro" in notes:
             return "narration_intro"
         if project_domain in {"education", "science"}:
             return "explanation_voice"
         return "narration_voice"
-    if asset_type in {"image", "video"}:
+    if artifact_type in {"image", "video", "graphic"}:
         if any(token in notes for token in {"grafico", "chart", "diagrama"}):
             return "evidence_visual"
         if project_domain == "business":
             return "presentation_visual"
         return "support_visual"
-    if asset_type == "audio":
+    if artifact_type == "audio":
         if target == "suno" or any(token in notes for token in {"trilha", "music", "musica"}):
             return "music_bed"
         return "sound_design"
     return "generic_asset"
+
+
+def _ensure_sequence_entry(timeline: dict, block: dict) -> None:
+    sequence_id = block.get("sequence_id")
+    if not sequence_id:
+        return
+    sequences = timeline.setdefault("sequences", [])
+    if any(item.get("sequence_id") == sequence_id for item in sequences):
+        return
+    sequences.append(
+        {
+            "sequence_id": sequence_id,
+            "sequence_label": block.get("sequence_label", sequence_id),
+            "sequence_index": int(block.get("sequence_index", 0) or 0),
+            "phase": block.get("phase", ""),
+            "status": block.get("status", "draft"),
+        }
+    )
+    sequences.sort(key=lambda item: (int(item.get("sequence_index", 0)), item.get("sequence_label", "")))
 
 
 def create_project(
@@ -124,8 +190,11 @@ def create_project(
     _assets_dir(storage_dir, project_drawer).mkdir(parents=True, exist_ok=True)
 
     timeline = {
+        "schema_version": "2.0",
         "project_id": project_id,
         "project_drawer": project_drawer,
+        "project_domain": _infer_project_domain(name, goal),
+        "workflow_type": _workflow_from_domain(_infer_project_domain(name, goal)),
         "nome": name,
         "objetivo": goal,
         "estado_global": "draft",
@@ -134,7 +203,9 @@ def create_project(
         "timeline_policy": {
             "placement_mode": "automatico",
             "export_intent": "json_interno",
+            "revision_policy": "tracked",
         },
+        "sequences": [],
         "blocks": [],
     }
     project = {
@@ -182,18 +253,19 @@ def _save_project_and_timeline(storage_dir: Path, project_drawer: str, project: 
 def _count_assets(blocks: list[dict]) -> dict:
     summary = _empty_assets_summary()
     for block in blocks:
-        asset_type = block.get("tipo_de_ativo")
-        if asset_type in summary:
-            summary[asset_type] += 1
+        artifact_type = block.get("artifact_type") or block.get("tipo_de_ativo")
+        if artifact_type in summary:
+            summary[artifact_type] += 1
     return summary
 
 
 def _track_priority(block: dict) -> tuple[int, int]:
-    asset_order = {"text": 0, "speech": 1, "image": 2, "video": 2, "audio": 3}
+    asset_order = {"text": 0, "note": 0, "table": 0, "speech": 1, "image": 2, "video": 2, "graphic": 2, "audio": 3}
     order = {"A1": 0, "V2": 1, "V1": 2, "A2": 3, "A3": 4}
-    asset_type = (block.get("tipo_de_ativo") or "").strip()
+    asset_type = (block.get("artifact_type") or block.get("tipo_de_ativo") or "").strip()
     track = (block.get("track") or "").strip()
-    return (asset_order.get(asset_type, 99), order.get(track, 99), int(block.get("in_point_ms", 0)))
+    sequence_index = int(block.get("sequence_index", 0) or 0)
+    return (sequence_index, asset_order.get(asset_type, 99), order.get(track, 99), int(block.get("in_point_ms", 0)))
 
 
 def _is_ready_dependency_candidate(block: dict) -> bool:
@@ -202,16 +274,27 @@ def _is_ready_dependency_candidate(block: dict) -> bool:
 
 def infer_block_dependencies(blocks: list[dict], project_domain: str = "general") -> list[dict]:
     ordered = sorted(blocks, key=_track_priority)
-    latest_by_role = {}
+    latest_by_role_by_sequence: dict[str, dict[str, str]] = {}
 
     for block in ordered:
         if not _is_ready_dependency_candidate(block):
+            block["dependency_targets"] = []
             block["dependencies"] = []
             block["dependency_reason"] = ""
             continue
 
+        explicit_dependencies = block.get("dependency_targets") or []
+        if explicit_dependencies:
+            block["dependencies"] = explicit_dependencies
+            block["dependency_reason"] = "explicit_dependency_targets"
+            sequence_key = block.get("sequence_id") or "__global__"
+            latest_by_role_by_sequence.setdefault(sequence_key, {})[_infer_semantic_role(block, project_domain)] = block["block_id"]
+            continue
+
+        sequence_key = block.get("sequence_id") or "__global__"
+        latest_by_role = latest_by_role_by_sequence.setdefault(sequence_key, {})
         semantic_role = _infer_semantic_role(block, project_domain)
-        asset_type = (block.get("tipo_de_ativo") or "").strip()
+        artifact_type = (block.get("artifact_type") or block.get("tipo_de_ativo") or "").strip()
         dependencies = []
         dependency_reason = ""
 
@@ -253,13 +336,14 @@ def infer_block_dependencies(blocks: list[dict], project_domain: str = "general"
             elif visual_base:
                 dependencies.append(visual_base)
                 dependency_reason = "audio_layer_follows_visual"
-        elif asset_type == "speech":
+        elif artifact_type == "speech":
             text_base = latest_by_role.get("knowledge_base") or latest_by_role.get("script_base")
             if text_base:
                 dependencies.append(text_base)
                 dependency_reason = "speech_depends_on_text"
 
         block["semantic_role"] = semantic_role
+        block["dependency_targets"] = dependencies
         block["dependencies"] = dependencies
         block["dependency_reason"] = dependency_reason
         latest_by_role[semantic_role] = block["block_id"]
@@ -269,17 +353,45 @@ def infer_block_dependencies(blocks: list[dict], project_domain: str = "general"
 
 def _normalize_block_for_timeline(prompt_block: dict) -> dict:
     timeline_stub = prompt_block.get("timeline_stub", {})
+    artifact_type = prompt_block.get("artifact_type") or prompt_block.get("tipo_de_ativo") or "text"
+    workflow_lane = prompt_block.get("workflow_lane") or timeline_stub.get("workflow_lane") or _infer_workflow_lane_from_artifact(artifact_type)
+    sequence_id = prompt_block.get("sequence_id") or timeline_stub.get("sequence_id") or "seq_000_principal"
+    sequence_label = prompt_block.get("sequence_label") or "principal"
+    sequence_index = int(prompt_block.get("sequence_index", 0) or 0)
+    unit_id = prompt_block.get("unit_id") or prompt_block.get("block_id")
+    target_tool = prompt_block.get("target_tool") or prompt_block.get("ferramenta_destino") or ""
     return {
         "block_id": prompt_block["block_id"],
         "prompt_origin_id": prompt_block["block_id"],
-        "tipo_de_ativo": prompt_block["tipo_de_ativo"],
-        "ferramenta_destino": prompt_block["ferramenta_destino"],
-        "track": timeline_stub.get("track", prompt_block.get("organizer_hint", {}).get("suggested_track", "V2")),
+        "user_id": prompt_block.get("user_id", ""),
+        "mode": prompt_block.get("mode", ""),
+        "workflow_lane": workflow_lane,
+        "track": timeline_stub.get("track", prompt_block.get("track", prompt_block.get("organizer_hint", {}).get("suggested_track", "V2"))),
+        "sequence_id": sequence_id,
+        "sequence_label": sequence_label,
+        "sequence_index": sequence_index,
+        "unit_id": unit_id,
+        "unit_type": prompt_block.get("unit_type", ""),
+        "unit_goal": prompt_block.get("unit_goal") or prompt_block.get("source_idea", ""),
+        "phase": prompt_block.get("phase", "generate"),
+        "artifact_id": prompt_block.get("artifact_id", ""),
+        "artifact_type": artifact_type,
+        "tipo_de_ativo": artifact_type,
+        "target_tool": target_tool,
+        "ferramenta_destino": target_tool,
+        "expected_output": prompt_block.get("expected_output", ""),
+        "expected_asset_match": prompt_block.get("expected_asset_match") or {"artifact_type": artifact_type},
         "in_point_ms": int(timeline_stub.get("in_point_ms", 0)),
         "out_point_ms": int(timeline_stub.get("out_point_ms", 0)),
         "file_reference": timeline_stub.get("file_reference", ""),
         "status": timeline_stub.get("status", "prompt_pronto"),
+        "dependency_targets": list(prompt_block.get("dependency_targets") or []),
         "dependencies": [],
+        "dependency_reason": "",
+        "revision_of": prompt_block.get("revision_of"),
+        "revision_reason": prompt_block.get("revision_reason", ""),
+        "insertion_mode": prompt_block.get("insertion_mode", "append"),
+        "supersedes": None,
         "source_ai": "",
         "notes": prompt_block.get("observacoes_operacionais", ""),
     }
@@ -294,7 +406,7 @@ def ingest_prompt_blocks(storage_dir: Path, project_drawer: str, block_id: str |
     timeline = load_timeline(storage_dir, project_drawer)
     existing_ids = {block["block_id"] for block in timeline.get("blocks", [])}
 
-    candidates = sorted(queue_dir.glob("blk_*.json"))
+    candidates = sorted(queue_dir.glob("*.json"))
     if block_id:
         candidates = [path for path in candidates if path.stem == block_id]
 
@@ -313,14 +425,16 @@ def ingest_prompt_blocks(storage_dir: Path, project_drawer: str, block_id: str |
 
         timeline_block = _normalize_block_for_timeline(payload)
         timeline["blocks"].append(timeline_block)
+        _ensure_sequence_entry(timeline, timeline_block)
         infer_block_dependencies(timeline["blocks"], project.get("domain_profile", "general"))
         existing_ids.add(current_id)
         ingested.append(
             {
                 "block_id": current_id,
-                "tipo_de_ativo": timeline_block["tipo_de_ativo"],
+                "artifact_type": timeline_block["artifact_type"],
+                "workflow_lane": timeline_block["workflow_lane"],
                 "track": timeline_block["track"],
-                "dependencies": timeline_block["dependencies"],
+                "dependency_targets": timeline_block["dependency_targets"],
                 "project_block_path": str(project_block_path),
             }
         )
@@ -354,7 +468,7 @@ def update_block(
 ) -> dict:
     if status and status not in VALID_BLOCK_STATUS:
         raise ValueError(f"Invalid block status: {status}")
-    if track and track not in {"V1", "V2", "A1", "A2", "A3"}:
+    if track and track not in MEDIA_TRACKS:
         raise ValueError(f"Invalid track: {track}")
 
     project = load_project(storage_dir, project_drawer)
@@ -417,8 +531,11 @@ def refresh_dependencies(storage_dir: Path, project_drawer: str) -> dict:
             {
                 "block_id": block.get("block_id"),
                 "semantic_role": block.get("semantic_role", ""),
+                "dependency_targets": block.get("dependency_targets", []),
                 "dependencies": block.get("dependencies", []),
                 "dependency_reason": block.get("dependency_reason", ""),
+                "workflow_lane": block.get("workflow_lane", ""),
+                "sequence_id": block.get("sequence_id", ""),
                 "track": block.get("track"),
                 "status": block.get("status"),
             }
@@ -442,11 +559,24 @@ def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
 
         block_id = block.get("block_id", "")
         prompt_origin_id = block.get("prompt_origin_id", "")
+        expected_match = block.get("expected_asset_match") or {}
+        expected_id = (expected_match.get("id") or "").strip()
+        expected_prefix = (expected_match.get("filename_prefix") or "").strip()
+        expected_artifact_type = (expected_match.get("artifact_type") or block.get("artifact_type") or "").strip().lower()
         file_match = next(
             (
                 path
                 for path in files
-                if block_id in path.name or (prompt_origin_id and prompt_origin_id in path.name)
+                if (
+                    (expected_id and expected_id in path.stem)
+                    or (expected_prefix and path.stem.startswith(expected_prefix))
+                    or (
+                        expected_artifact_type
+                        and path.stem == block_id
+                        and expected_artifact_type == (block.get("artifact_type") or "").strip().lower()
+                    )
+                    or (not expected_id and not expected_prefix and (block_id and block_id in path.name or (prompt_origin_id and prompt_origin_id in path.name)))
+                )
             ),
             None,
         )
@@ -457,7 +587,7 @@ def scan_generated_assets(storage_dir: Path, project_drawer: str) -> dict:
         block["file_reference"] = str(file_match)
         block["status"] = "gerado"
         if not block.get("source_ai"):
-            block["source_ai"] = block.get("ferramenta_destino", "")
+            block["source_ai"] = block.get("target_tool") or block.get("ferramenta_destino", "")
         matched.append(
             {
                 "block_id": block_id,
