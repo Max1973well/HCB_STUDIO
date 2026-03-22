@@ -811,7 +811,8 @@ def command_organizer_list_projects(args):
         return
     for row in rows:
         print(
-            f"- {row.get('project_drawer')} | {row.get('nome')} | {row.get('estado_global')} | {row.get('timeline_file')}"
+            f"- {row.get('project_drawer')} | {row.get('nome')} | {row.get('estado_global')} | "
+            f"dominio={row.get('domain_profile', 'general')} | timeline={row.get('timeline_file')}"
         )
 
 

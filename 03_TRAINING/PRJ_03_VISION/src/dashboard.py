@@ -75,13 +75,21 @@ def build_block_table(timeline_payload):
         rows.append(
             {
                 "Block": block.get("block_id"),
-                "Tipo": block.get("tipo_de_ativo"),
+                "Seq": block.get("sequence_id"),
+                "Unit": block.get("unit_id"),
+                "Fase": block.get("phase"),
+                "Lane": block.get("workflow_lane"),
+                "Tipo": block.get("artifact_type") or block.get("tipo_de_ativo"),
+                "Unit Type": block.get("unit_type"),
                 "Track": block.get("track"),
                 "Status": block.get("status"),
                 "Papel": block.get("semantic_role"),
                 "Motivo": block.get("dependency_reason"),
-                "AI": block.get("source_ai") or block.get("ferramenta_destino"),
-                "Dependencias": ", ".join(block.get("dependencies", [])),
+                "Ferramenta": block.get("target_tool") or block.get("ferramenta_destino"),
+                "AI": block.get("source_ai") or block.get("target_tool") or block.get("ferramenta_destino"),
+                "Dependencias": ", ".join(block.get("dependency_targets", []) or block.get("dependencies", [])),
+                "Insercao": block.get("insertion_mode"),
+                "Revision Of": block.get("revision_of"),
                 "IN(ms)": block.get("in_point_ms"),
                 "OUT(ms)": block.get("out_point_ms"),
                 "Arquivo": block.get("file_reference"),
@@ -237,9 +245,30 @@ else:
     timeline_payload = load_timeline(STORAGE_PATH, selected_drawer)
     st.caption(
         f"Timeline: {timeline_payload.get('timeline_policy', {}).get('placement_mode', 'automatico')} | "
+        f"Workflow: {timeline_payload.get('workflow_type', 'general_flow')} | "
         f"Projeto: {timeline_payload.get('nome', '')}"
     )
     st.caption(f"Assets inbox: {selected_project.get('assets_inbox_dir', '(nao definido)')}")
+
+    sequences = timeline_payload.get("sequences", [])
+    if sequences:
+        st.caption("Sequencias do projeto")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Sequence": seq.get("sequence_id"),
+                        "Label": seq.get("sequence_label"),
+                        "Index": seq.get("sequence_index"),
+                        "Fase": seq.get("phase"),
+                        "Status": seq.get("status"),
+                    }
+                    for seq in sequences
+                ]
+            ),
+            use_container_width=True,
+            height=140,
+        )
 
     action_col_1, action_col_2, action_col_3 = st.columns(3)
     with action_col_1:
