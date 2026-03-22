@@ -3,6 +3,23 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+SCI_ONBOARDING_QUESTIONS = [
+    "1. Nome de exibição do usuário",
+    "2. Idioma principal (ex.: pt-BR)",
+    "3. Fuso horário (ex.: Europe/London)",
+    "4. Perfil principal de uso: general|creator|student|teacher|researcher|business|developer",
+    "5. Nível técnico: beginner|intermediate|advanced",
+    "6. Tom preferido: direct|balanced|gentle",
+    "7. Profundidade de resposta: short|balanced|deep",
+    "8. Precisa de passo a passo? yes|no",
+    "9. Estilo de correção: explicit|gentle|mixed",
+    "10. Precisa de adaptação? yes|no",
+    "11. Suporte visual? yes|no",
+    "12. Suporte motor? yes|no",
+    "13. Suporte para fadiga? yes|no",
+    "14. Observações de acessibilidade (opcional)",
+]
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -23,6 +40,10 @@ def hcb_states_dir(root: Path) -> Path:
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _to_bool(value: str) -> bool:
+    return (value or "").strip().lower() in {"1", "y", "yes", "s", "sim", "true"}
 
 
 def create_sci_profile(
@@ -118,3 +139,48 @@ def create_hcb_state(
     out = hcb_states_dir(root) / f"{user_id}.json"
     _write_json(out, payload)
     return out
+
+
+def run_sci_onboarding_wizard(root: Path, user_id: str, answers: dict | None = None) -> Path:
+    answers = answers or {}
+
+    def ask(key: str, prompt: str, default: str = "") -> str:
+        if key in answers:
+            return str(answers[key])
+        suffix = f" [{default}]" if default else ""
+        raw = input(f"{prompt}{suffix}: ").strip()
+        return raw or default
+
+    display_name = ask("display_name", "Nome de exibição")
+    primary_language = ask("primary_language", "Idioma principal", "pt-BR")
+    timezone_name = ask("timezone_name", "Fuso horário", "Europe/London")
+    role_profile = ask("role_profile", "Perfil principal de uso", "general")
+    technical_level = ask("technical_level", "Nível técnico", "intermediate")
+    preferred_tone = ask("preferred_tone", "Tom preferido", "balanced")
+    response_depth = ask("response_depth", "Profundidade de resposta", "balanced")
+    step_by_step = _to_bool(ask("step_by_step", "Precisa de passo a passo? yes/no", "yes"))
+    correction_style = ask("correction_style", "Estilo de correção", "mixed")
+    needs_adaptation = _to_bool(ask("needs_adaptation", "Precisa de adaptação? yes/no", "no"))
+    visual_support = _to_bool(ask("visual_support", "Suporte visual? yes/no", "no"))
+    motor_support = _to_bool(ask("motor_support", "Suporte motor? yes/no", "no"))
+    fatigue_support = _to_bool(ask("fatigue_support", "Suporte para fadiga? yes/no", "no"))
+    accessibility_notes = ask("accessibility_notes", "Observações de acessibilidade", "")
+
+    return create_sci_profile(
+        root=root,
+        user_id=user_id,
+        display_name=display_name,
+        primary_language=primary_language,
+        timezone_name=timezone_name,
+        role_profile=role_profile,
+        technical_level=technical_level,
+        preferred_tone=preferred_tone,
+        response_depth=response_depth,
+        step_by_step=step_by_step,
+        correction_style=correction_style,
+        needs_adaptation=needs_adaptation,
+        visual_support=visual_support,
+        motor_support=motor_support,
+        fatigue_support=fatigue_support,
+        accessibility_notes=accessibility_notes,
+    )

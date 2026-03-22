@@ -15,7 +15,7 @@ from arms.ai_engine import (
     set_active_provider,
 )
 from arms.concept_registry import list_concepts, upsert_concept
-from arms.hcb_identity import create_hcb_state, create_sci_profile
+from arms.hcb_identity import SCI_ONBOARDING_QUESTIONS, create_hcb_state, create_sci_profile, run_sci_onboarding_wizard
 from arms.arm_memory_fabric import find_capsules, list_capsules, save_capsule
 from arms.arm_tool_runner import build_tool_action, run_tool_action
 from arms.event_bus import append_event, read_recent_events
@@ -236,6 +236,17 @@ def command_identity_init(args):
         accessibility_notes=args.accessibility_notes,
     )
     print(f"SCI profile created: {path}")
+
+
+def command_identity_questions(_args):
+    print("--- HCB SCI ONBOARDING QUESTIONS ---")
+    for row in SCI_ONBOARDING_QUESTIONS:
+        print(f"- {row}")
+
+
+def command_identity_wizard(args):
+    path = run_sci_onboarding_wizard(ROOT, user_id=args.user_id)
+    print(f"SCI profile created via wizard: {path}")
 
 
 def command_state_init(args):
@@ -972,6 +983,13 @@ def build_parser():
     identity_init.add_argument("--fatigue-support", action="store_true")
     identity_init.add_argument("--accessibility-notes", default="")
     identity_init.set_defaults(func=command_identity_init)
+
+    identity_questions = identity_sub.add_parser("questions", help="list the objective SCI onboarding questions")
+    identity_questions.set_defaults(func=command_identity_questions)
+
+    identity_wizard = identity_sub.add_parser("wizard", help="run the SCI onboarding wizard in the terminal")
+    identity_wizard.add_argument("--user-id", required=True)
+    identity_wizard.set_defaults(func=command_identity_wizard)
 
     state_parser = subparsers.add_parser("state", help="HCB dynamic state bootstrap")
     state_sub = state_parser.add_subparsers(dest="state_command", required=True)
