@@ -1,32 +1,174 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "PromptBlock",
-  "description": "Schema for Arm 09 prompt artifacts handed off to Arm 10.",
+  "title": "PromptBlockV2",
+  "description": "Universal v2 schema for Arm 09 operational units handed off to Arm 10.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0"
+    },
     "block_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy compatibility identifier. Should mirror unit_id when present."
     },
     "created_at": {
       "type": "string",
       "format": "date-time"
     },
     "source_arm": {
-      "type": "string"
+      "type": "string",
+      "const": "arm_09_prompt_writer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "prompt_pronto",
+        "executando",
+        "gerado",
+        "revisao",
+        "aprovado",
+        "concluido",
+        "descartado"
+      ]
     },
     "estado": {
       "type": "string",
-      "enum": ["prompt_pronto"]
+      "description": "Legacy alias for status."
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "role_profile": {
+      "type": "string"
+    },
+    "active_project": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "project_drawer": {
+      "type": "string"
+    },
+    "project_domain": {
+      "type": "string",
+      "enum": [
+        "media",
+        "education",
+        "science",
+        "business",
+        "home",
+        "assistive",
+        "general"
+      ]
+    },
+    "workflow_type": {
+      "type": "string",
+      "enum": [
+        "media_production",
+        "teaching_flow",
+        "research_flow",
+        "business_flow",
+        "home_flow",
+        "assistive_flow",
+        "general_flow"
+      ]
+    },
+    "workflow_lane": {
+      "type": "string",
+      "enum": [
+        "instruction",
+        "evidence",
+        "visual",
+        "audio",
+        "review",
+        "support",
+        "planning",
+        "execution"
+      ]
+    },
+    "track": {
+      "type": "string",
+      "description": "Optional media-specific track."
+    },
+    "sequence_id": {
+      "type": "string"
+    },
+    "sequence_label": {
+      "type": "string"
+    },
+    "sequence_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unit_id": {
+      "type": "string"
+    },
+    "unit_type": {
+      "type": "string",
+      "enum": [
+        "instruction_block",
+        "planning_block",
+        "teaching_block",
+        "evidence_block",
+        "media_block",
+        "support_block",
+        "review_block",
+        "assistive_block"
+      ]
+    },
+    "unit_goal": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "capture",
+        "plan",
+        "generate",
+        "validate",
+        "organize",
+        "review",
+        "finalize"
+      ]
     },
     "source_idea": {
       "type": "string"
     },
+    "artifact_id": {
+      "type": "string"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "speech",
+        "image",
+        "video",
+        "audio",
+        "graphic",
+        "checklist",
+        "table",
+        "note",
+        "task"
+      ]
+    },
     "tipo_de_ativo": {
       "type": "string",
-      "enum": ["image", "video", "audio", "speech", "text"]
+      "description": "Legacy alias for artifact_type."
+    },
+    "target_tool": {
+      "type": "string"
     },
     "ferramenta_destino": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy alias for target_tool."
     },
     "idioma_prompt": {
       "type": "string"
@@ -35,6 +177,47 @@
       "type": "string"
     },
     "prompt_curto": {
+      "type": "string"
+    },
+    "expected_output": {
+      "type": "string"
+    },
+    "expected_asset_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "filename_prefix": {
+          "type": "string"
+        },
+        "artifact_type": {
+          "type": "string"
+        }
+      },
+      "required": ["artifact_type"]
+    },
+    "dependency_targets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "insertion_mode": {
+      "type": "string",
+      "enum": [
+        "append",
+        "insert_before",
+        "insert_after",
+        "replace",
+        "fork_revision"
+      ]
+    },
+    "revision_of": {
+      "type": ["string", "null"]
+    },
+    "revision_reason": {
       "type": "string"
     },
     "checklist_validacao": {
@@ -48,39 +231,52 @@
     },
     "organizer_hint": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
+        "workflow_lane": {
+          "type": "string"
+        },
         "suggested_track": {
-          "type": "string",
-          "enum": ["V1", "V2", "A1", "A2", "A3"]
+          "type": "string"
         },
         "asset_type": {
           "type": "string"
         },
         "status": {
-          "type": "string",
-          "enum": ["prompt_pronto"]
+          "type": "string"
         },
         "next_arm": {
           "type": "string"
         }
       },
-      "required": ["suggested_track", "asset_type", "status", "next_arm"]
+      "required": ["workflow_lane", "asset_type", "status", "next_arm"]
     },
     "timeline_stub": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "block_id": {
           "type": "string"
         },
+        "unit_id": {
+          "type": "string"
+        },
+        "sequence_id": {
+          "type": "string"
+        },
+        "workflow_lane": {
+          "type": "string"
+        },
         "track": {
-          "type": "string",
-          "enum": ["V1", "V2", "A1", "A2", "A3"]
+          "type": "string"
         },
         "in_point_ms": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "out_point_ms": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "file_reference": {
           "type": "string"
@@ -89,11 +285,17 @@
           "type": "string"
         },
         "status": {
-          "type": "string",
-          "enum": ["prompt_pronto"]
+          "type": "string"
         }
       },
-      "required": ["block_id", "track", "in_point_ms", "out_point_ms", "prompt_origin_id", "status"]
+      "required": [
+        "block_id",
+        "unit_id",
+        "sequence_id",
+        "workflow_lane",
+        "prompt_origin_id",
+        "status"
+      ]
     },
     "validation_issues": {
       "type": "array",
@@ -106,17 +308,30 @@
     }
   },
   "required": [
-    "block_id",
+    "schema_version",
     "created_at",
     "source_arm",
-    "estado",
-    "source_idea",
-    "tipo_de_ativo",
-    "ferramenta_destino",
-    "idioma_prompt",
+    "status",
+    "user_id",
+    "project_drawer",
+    "project_domain",
+    "workflow_type",
+    "workflow_lane",
+    "sequence_id",
+    "sequence_label",
+    "sequence_index",
+    "unit_id",
+    "unit_type",
+    "unit_goal",
+    "phase",
+    "artifact_type",
+    "target_tool",
     "prompt_oficial",
     "prompt_curto",
-    "organizer_hint",
+    "expected_output",
+    "expected_asset_match",
+    "dependency_targets",
+    "insertion_mode",
     "timeline_stub"
   ]
 }
