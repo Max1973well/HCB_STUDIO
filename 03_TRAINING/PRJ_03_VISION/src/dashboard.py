@@ -28,6 +28,7 @@ from arms.arm_10_block_organizer import (
     refresh_dependencies,
     scan_generated_assets,
 )
+from arms.hcb_identity import get_active_identity, load_active_user_context
 
 
 st.set_page_config(
@@ -97,6 +98,14 @@ st.sidebar.success("🟢 ONLINE")
 st.sidebar.info("Unidade: F:\\")
 st.sidebar.caption("Motor de IA ativo via 00_Core/config/ai_engine.json")
 
+active_identity = get_active_identity(ROOT)
+active_context = load_active_user_context(ROOT)
+
+if active_identity:
+    st.sidebar.success(f"SCI ativo: {active_identity.get('active_user_id', '(desconhecido)')}")
+else:
+    st.sidebar.error("SCI não ativo. O HCB.exe deve operar com identidade carregada.")
+
 gemini_key_input = st.sidebar.text_input(
     "GEMINI_API_KEY (sessão atual)",
     type="password",
@@ -105,6 +114,31 @@ gemini_key_input = st.sidebar.text_input(
 if gemini_key_input:
     os.environ["GEMINI_API_KEY"] = gemini_key_input.strip()
     st.sidebar.success("Chave carregada na sessão.")
+
+with st.sidebar.expander("Contexto HCB", expanded=False):
+    if not active_context:
+        st.caption("Sem SCI/HCB State carregados.")
+    else:
+        sci = active_context.get("sci") or {}
+        state = active_context.get("state") or {}
+        identity_base = sci.get("identity_base") or {}
+        interaction_profile = sci.get("interaction_profile") or {}
+        st.markdown(f"**Usuário:** `{active_context.get('user_id', '')}`")
+        st.caption(
+            f"Perfil: {identity_base.get('role_profile', '')} | "
+            f"Técnico: {identity_base.get('technical_level', '')}"
+        )
+        st.caption(
+            f"Tom: {interaction_profile.get('preferred_tone', '')} | "
+            f"Profundidade: {interaction_profile.get('response_depth', '')}"
+        )
+        if state:
+            st.caption(
+                f"Modo: {state.get('mode', '')} | Energia: {state.get('energy', '')} | "
+                f"Foco: {state.get('focus', '')}"
+            )
+            if state.get("active_project"):
+                st.caption(f"Projeto ativo: {state.get('active_project')}")
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -259,6 +293,10 @@ if prompt:
             try:
                 result = generate_with_active_provider(AI_CONFIG, prompt)
                 answer = result.get("text", "").strip() or "(sem texto retornado)"
+                if result.get("hcb_context_loaded"):
+                    st.caption("Resposta gerada com SCI + HCB State ativos.")
+                else:
+                    st.caption("Resposta gerada sem contexto HCB carregado.")
             except Exception as e:
                 answer = f"Erro no motor IA: {e}"
         st.markdown(answer)
@@ -319,4 +357,3 @@ if st.button("Limpar Quarentena (Forçar Saneamento)"):
     st.success(f"Limpeza concluída. {files_removed} arquivos removidos.")
     time.sleep(1)
     st.rerun()
-
